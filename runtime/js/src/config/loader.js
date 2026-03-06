@@ -100,10 +100,18 @@ function resolveListenerConfig() {
     if (envVal != null && String(envVal).trim() !== "") return String(envVal).trim();
     return fallback == null ? "" : String(fallback);
   };
+  // 凭据类配置优先使用环境变量，避免 config.sh 仍为占位符时把 REPLACE_WITH_YOUR_AGENT_ID 发到服务端
+  const pickCred = (key, fallback) => {
+    const envVal = process.env[key];
+    if (envVal != null && String(envVal).trim() !== "") return String(envVal).trim();
+    const shellVal = shellCfg[key];
+    if (shellVal != null && String(shellVal).trim() !== "") return String(shellVal).trim();
+    return fallback == null ? "" : String(fallback);
+  };
 
-  const baseUrl = pick("BASE_URL", "");
-  const agentId = pick("AGENT_ID", "");
-  const agentSecret = pick("AGENT_SECRET", "");
+  const baseUrl = pickCred("BASE_URL", "");
+  const agentId = pickCred("AGENT_ID", "");
+  const agentSecret = pickCred("AGENT_SECRET", "");
   if (!baseUrl) {
     throw new Error("missing BASE_URL");
   }

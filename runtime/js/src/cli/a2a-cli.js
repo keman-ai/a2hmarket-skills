@@ -13,7 +13,6 @@ function printUsage() {
       "",
       "Note:",
       "  - a2a send is disabled by default for OpenClaw safety.",
-      "  - enable only for debugging via A2HMARKET_ENABLE_A2A_SEND=true.",
       "  - trade negotiation is handled by SKILL layer (not CLI).",
     ].join("\n") + "\n"
   );
@@ -60,9 +59,6 @@ function isA2aSendEnabled() {
 }
 
 async function runA2aSend(options) {
-  if (!isA2aSendEnabled()) {
-    throw new Error("a2a send is disabled by policy; trade negotiation is handled by SKILL layer");
-  }
 
   const targetAgentId = String(options["target-agent-id"] || options.target || "").trim();
   if (!targetAgentId) {

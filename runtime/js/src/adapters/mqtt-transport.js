@@ -38,77 +38,66 @@ class MqttTransport extends EventEmitter {
     this.lastConnectTime = 0;
     this.lastDisconnectTime = 0;
     this.consecutiveQuickDisconnects = 0;
+    this.connectionGeneration = 0;
   }
 
-  async connect({ agentId, agentSecret, forceRefresh }) {
-    // Close existing client to prevent resource leak
-    if (this.client) {
-      this.logger.info("mqtt closing existing client before reconnect");
-      try {
-        this.client.end(true);
-      } catch (err) {
-        this.logger.warn(`mqtt failed to close existing client: ${err.message}`);
-      }
-      this.client = null;
+  clearReconnectTimer() {
+    if (!this.reconnectTimer) return;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+  }
+
+  scheduleReconnect(reason) {
+    if (!this.shouldReconnect || !this.currentAgentId || !this.currentAgentSecret) {
+      return;
     }
-    
-    this.currentAgentId = agentId;
-    this.currentAgentSecret = agentSecret;
-    const token = await this.tokenClient.getToken({
-      agentId,
-      agentSecret,
-      clientId: this.tokenClient.buildClientId(agentId),
-      forceRefresh: Boolean(forceRefresh),
-    });
-    this.currentClientId = token.client_id;
 
-    const url = buildBrokerUrl(this.cfg);
-    this.logger.info(
-      `mqtt connect endpoint=${this.cfg.mqttEndpoint} client_id=${token.client_id} token_source=${token.source}`
-    );
+    const reconnectDelayMs = this.cfg.mqttReconnectPeriodMs || 5000;
+    this.clearReconnectTimer();
+    this.logger.info(`mqtt scheduling reconnect in ${reconnectDelayMs}ms reason=${reason} with token refresh`);
 
-    const client = this.clientFactory(url, {
-      clientId: token.client_id,
-      username: token.username,
-      password: token.password,
-      reconnectPeriod: 0,  // Disable automatic reconnect - we'll handle it manually
-      connectTimeout: this.cfg.mqttConnectTimeoutMs,
-      protocolVersion: 4,
-      // Keep session across transient disconnects so qos1 messages are not dropped while offline.
-      clean: false,
-      keepalive: 60,
-      rejectUnauthorized: false,
-    });
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
+      if (!this.shouldReconnect) {
+        this.logger.debug("mqtt reconnect cancelled (client closed)");
+        return;
+      }
 
-    await new Promise((resolve, reject) => {
-      const onConnect = () => {
-        cleanup();
-        resolve();
-      };
-      const onError = (err) => {
-        cleanup();
-        reject(err);
-      };
-      const cleanup = () => {
-        client.off("connect", onConnect);
-        client.off("error", onError);
-      };
-      client.on("connect", onConnect);
-      client.on("error", onError);
-    });
+      try {
+        this.logger.info("mqtt manual reconnect starting");
+        await this.connect({
+          agentId: this.currentAgentId,
+          agentSecret: this.currentAgentSecret,
+          forceRefresh: true,
+        });
+        this.logger.info("mqtt manual reconnect successful");
+      } catch (err) {
+        this.logger.error(`mqtt manual reconnect failed: ${err.message}`);
+        this.scheduleReconnect("connect_failed");
+      }
+    }, reconnectDelayMs);
+  }
+
+  bindClientEvents(client) {
+    let clientConnected = false;
+    let clientConnectedAt = 0;
 
     client.on("message", (topic, payload) => {
+      if (this.client !== client) return;
       const body = Buffer.isBuffer(payload) ? payload.toString("utf8") : String(payload || "");
       this.logger.info(`mqtt message received topic=${topic} size=${body.length}b payload=${body.slice(0, 500)}`);
       this.emit("message", { topic, payload: body });
     });
-    
+
     client.on("connect", (packet) => {
+      if (this.client !== client) return;
       const now = Date.now();
       const sessionPresent = Boolean(packet && packet.sessionPresent);
       const timeSinceLastConnect = this.lastConnectTime ? now - this.lastConnectTime : 0;
+      clientConnected = true;
+      clientConnectedAt = now;
       this.lastConnectTime = now;
-      
+
       // Log normally on first connect or after stable period, suppress on rapid reconnects
       if (timeSinceLastConnect === 0 || timeSinceLastConnect > 30000) {
         this.logger.info(`mqtt connected session_present=${sessionPresent ? "1" : "0"}`);
@@ -117,15 +106,23 @@ class MqttTransport extends EventEmitter {
       }
       this.emit("connect", { sessionPresent });
     });
+
     client.on("error", (err) => {
+      if (this.client !== client) return;
       this.logger.warn(`mqtt error: ${err && err.message ? err.message : String(err)}`);
-      this.emit("error", err);
+      if (this.listenerCount("error") > 0) {
+        this.emit("error", err);
+      }
     });
+
     client.on("close", () => {
+      if (this.client !== client) return;
+      this.client = null;
+
       const now = Date.now();
-      const connectedDuration = this.lastConnectTime ? now - this.lastConnectTime : 0;
+      const connectedDuration = clientConnectedAt ? now - clientConnectedAt : 0;
       this.lastDisconnectTime = now;
-      
+
       // Detect frequent disconnects (< 15s connected)
       if (connectedDuration > 0 && connectedDuration < 15000) {
         this.consecutiveQuickDisconnects++;
@@ -153,43 +150,109 @@ class MqttTransport extends EventEmitter {
           this.logger.warn(`mqtt disconnected after ${(connectedDuration / 1000).toFixed(1)}s`);
         }
       }
-      this.emit("disconnect");
-      
-      // Manual reconnect logic
-      if (this.shouldReconnect && this.currentAgentId && this.currentAgentSecret) {
-        const reconnectDelayMs = this.cfg.mqttReconnectPeriodMs || 5000;
-        this.logger.info(`mqtt scheduling reconnect in ${reconnectDelayMs}ms with token refresh`);
-        
-        if (this.reconnectTimer) {
-          clearTimeout(this.reconnectTimer);
-        }
-        
-        this.reconnectTimer = setTimeout(async () => {
-          this.reconnectTimer = null;
-          if (!this.shouldReconnect) {
-            this.logger.debug("mqtt reconnect cancelled (client closed)");
-            return;
-          }
-          
-          try {
-            this.logger.info("mqtt manual reconnect starting");
-            await this.connect({
-              agentId: this.currentAgentId,
-              agentSecret: this.currentAgentSecret,
-              forceRefresh: true,
-            });
-            // Re-subscribe will be handled by onConnect event handler in a2a/service.js
-            this.emit("connect", { sessionPresent: false });
-            this.logger.info("mqtt manual reconnect successful");
-          } catch (err) {
-            this.logger.error(`mqtt manual reconnect failed: ${err.message}`);
-            // Will retry on next close event
-          }
-        }, reconnectDelayMs);
-      }
-    });
 
+      if (clientConnected) {
+        this.emit("disconnect");
+      }
+      this.scheduleReconnect("close");
+    });
+  }
+
+  async connect({ agentId, agentSecret, forceRefresh }) {
+    const connectionGeneration = ++this.connectionGeneration;
+    this.clearReconnectTimer();
+
+    // Close existing client to prevent resource leak
+    if (this.client) {
+      const previousClient = this.client;
+      this.client = null;
+      this.logger.info("mqtt closing existing client before reconnect");
+      try {
+        previousClient.end(true);
+      } catch (err) {
+        this.logger.warn(`mqtt failed to close existing client: ${err.message}`);
+      }
+    }
+    
+    this.currentAgentId = agentId;
+    this.currentAgentSecret = agentSecret;
+    const token = await this.tokenClient.getToken({
+      agentId,
+      agentSecret,
+      clientId: this.tokenClient.buildClientId(agentId),
+      forceRefresh: Boolean(forceRefresh),
+    });
+    if (connectionGeneration !== this.connectionGeneration) {
+      throw new Error("mqtt connect aborted");
+    }
+    this.currentClientId = token.client_id;
+
+    const url = buildBrokerUrl(this.cfg);
+    this.logger.info(
+      `mqtt connect endpoint=${this.cfg.mqttEndpoint} client_id=${token.client_id} token_source=${token.source}`
+    );
+
+    const client = this.clientFactory(url, {
+      clientId: token.client_id,
+      username: token.username,
+      password: token.password,
+      reconnectPeriod: 0,  // Disable automatic reconnect - we'll handle it manually
+      connectTimeout: this.cfg.mqttConnectTimeoutMs,
+      protocolVersion: 4,
+      // Keep session across transient disconnects so qos1 messages are not dropped while offline.
+      clean: false,
+      keepalive: 60,
+      rejectUnauthorized: false,
+    });
     this.client = client;
+    this.bindClientEvents(client);
+
+    try {
+      await new Promise((resolve, reject) => {
+        const onConnect = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = (err) => {
+          cleanup();
+          reject(err);
+        };
+        const onClose = () => {
+          cleanup();
+          reject(new Error("mqtt connection closed before connect"));
+        };
+        const cleanup = () => {
+          client.off("connect", onConnect);
+          client.off("error", onError);
+          client.off("close", onClose);
+        };
+        client.on("connect", onConnect);
+        client.on("error", onError);
+        client.on("close", onClose);
+      });
+    } catch (err) {
+      if (this.client === client) {
+        this.client = null;
+      }
+      try {
+        client.end(true);
+      } catch {
+        // ignore
+      }
+      throw err;
+    }
+    if (connectionGeneration !== this.connectionGeneration) {
+      if (this.client === client) {
+        this.client = null;
+      }
+      try {
+        client.end(true);
+      } catch {
+        // ignore
+      }
+      throw new Error("mqtt connect aborted");
+    }
+
     this.shouldReconnect = true;  // Enable automatic reconnection
     return {
       clientId: token.client_id,
@@ -234,17 +297,16 @@ class MqttTransport extends EventEmitter {
 
   close() {
     this.shouldReconnect = false;  // Disable automatic reconnection
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+    this.connectionGeneration += 1;
+    this.clearReconnectTimer();
     if (!this.client) return;
+    const client = this.client;
+    this.client = null;
     try {
-      this.client.end(true);
+      client.end(true);
     } catch {
       // ignore
     }
-    this.client = null;
   }
 }
 
