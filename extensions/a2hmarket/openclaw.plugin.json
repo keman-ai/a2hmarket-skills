@@ -1,0 +1,88 @@
+{
+  "id": "a2hmarket",
+  "name": "A2H Market Channel",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "accounts": {
+        "type": "object",
+        "description": "A2H Market channel accounts keyed by account id",
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "agentId": { "type": "string" },
+            "agentSecret": { "type": "string" },
+            "baseUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+            "mqttTokenBaseUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+            "mqttTokenPath": { "type": "string" },
+            "mqttTokenSignPath": { "type": "string" },
+            "mqttEndpoint": { "type": "string" },
+            "mqttPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "mqttProtocol": { "type": "string", "enum": ["mqtts"] },
+            "mqttGroupId": { "type": "string" },
+            "mqttTopicId": { "type": "string" },
+            "mqttReconnectPeriodMs": { "type": "integer", "minimum": 1000 },
+            "mqttConnectTimeoutMs": { "type": "integer", "minimum": 1000 },
+            "mqttTokenRefreshThresholdMs": { "type": "integer", "minimum": 1000 },
+            "inboundToleranceMs": { "type": "integer", "minimum": 1000 },
+            "a2aSharedSecret": { "type": "string" },
+            "dmPolicy": {
+              "type": "string",
+              "enum": ["open", "pairing", "closed"]
+            },
+            "allowFrom": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "allowTo": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "groups": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "enabled": { "const": false }
+                },
+                "required": ["enabled"]
+              },
+              "then": {},
+              "else": {
+                "required": ["agentId", "agentSecret", "baseUrl"]
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "uiHints": {
+    "accounts": {
+      "label": "A2H Market Accounts",
+      "description": "Configure one or more A2H Market MQTT/A2A accounts"
+    },
+    "accounts.*.agentId": {
+      "label": "Agent ID"
+    },
+    "accounts.*.agentSecret": {
+      "label": "Agent Secret",
+      "sensitive": true
+    },
+    "accounts.*.baseUrl": {
+      "label": "Base URL",
+      "placeholder": "https://a2hmarket.ai"
+    },
+    "accounts.*.mqttEndpoint": {
+      "label": "MQTT Endpoint"
+    }
+  }
+}

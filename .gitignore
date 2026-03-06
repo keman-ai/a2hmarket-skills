@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+*.log
+runtime/store/*.db
+runtime/store/*.lock
+runtime/store/*.pid
+runtime/logs/
+.a2hmarket/
