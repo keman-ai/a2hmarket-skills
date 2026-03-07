@@ -441,3 +441,81 @@ test("pending push rows expose stored target session fields", () => {
     fs.rmSync(temp.dir, { recursive: true, force: true });
   }
 });
+
+test("getEvent returns full event with parsed payload", () => {
+  const temp = createTempDbPath();
+  const store = new EventStore(temp.dbPath).open();
+
+  try {
+    const fullPayload = {
+      protocol: "a2hmarket-a2a",
+      message_id: "msg-get-1",
+      sender_id: "peer-get",
+      payload: {
+        text: "## 订单确认\n\n价格：¥300\n\n[![收款码](https://qr.example.com/pay.png)](https://qr.example.com/pay.png)",
+      },
+    };
+    store.insertIncomingEvent({
+      event_id: "evt-get-1",
+      peer_id: "peer-get",
+      message_id: "msg-get-1",
+      msg_ts: 1000,
+      hash: "h1",
+      unread_count: 1,
+      preview: "订单确认 价格：¥300 ...",
+      payload: fullPayload,
+      state: "NEW",
+      source: "MQTT",
+      a2a_message_id: "msg-get-1",
+      push_enabled: false,
+    });
+
+    const event = store.getEvent("evt-get-1");
+    assert.ok(event);
+    assert.equal(event.event_id, "evt-get-1");
+    assert.equal(event.peer_id, "peer-get");
+    assert.equal(event.source, "MQTT");
+    assert.deepEqual(event.payload, fullPayload);
+    assert.ok(event.payload.payload.text.includes("[![收款码]"));
+
+    const missing = store.getEvent("nonexistent-id");
+    assert.equal(missing, null);
+  } finally {
+    store.close();
+    fs.rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("inbox get via service returns event or not_found", async () => {
+  const { get } = require("../../runtime/js/src/inbox/inbox-service");
+  const temp = createTempDbPath();
+  const store = new EventStore(temp.dbPath).open();
+
+  try {
+    store.insertIncomingEvent({
+      event_id: "evt-svc-1",
+      peer_id: "peer-svc",
+      message_id: "msg-svc-1",
+      msg_ts: 2000,
+      hash: "h2",
+      unread_count: 1,
+      preview: "test",
+      payload: { payload: { text: "full message body" } },
+      state: "NEW",
+      source: "MQTT",
+      push_enabled: false,
+    });
+    store.close();
+
+    const found = await get({ dbPath: temp.dbPath, eventId: "evt-svc-1" });
+    assert.equal(found.ok, true);
+    assert.equal(found.event.event_id, "evt-svc-1");
+    assert.equal(found.event.payload.payload.text, "full message body");
+
+    const notFound = await get({ dbPath: temp.dbPath, eventId: "no-such" });
+    assert.equal(notFound.ok, false);
+    assert.equal(notFound.error, "event_not_found");
+  } finally {
+    fs.rmSync(temp.dir, { recursive: true, force: true });
+  }
+});

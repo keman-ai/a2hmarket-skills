@@ -642,6 +642,53 @@ class EventStore {
       LIMIT ?
     `).all(coerceInt(limit, 5));
   }
+
+  getEvent(eventId) {
+    const row = this.db.prepare(`
+      SELECT
+        e.seq,
+        e.event_id,
+        e.peer_id,
+        e.message_id,
+        e.msg_ts,
+        e.unread_count,
+        e.preview,
+        e.payload_json,
+        e.state,
+        e.source,
+        e.a2a_message_id,
+        e.target_session_id,
+        e.target_session_key,
+        e.created_at,
+        e.updated_at
+      FROM message_event e
+      WHERE e.event_id = ?
+    `).get(String(eventId));
+    if (!row) return null;
+    let payload = {};
+    try {
+      payload = JSON.parse(row.payload_json || "{}");
+    } catch {
+      payload = { raw: row.payload_json || "" };
+    }
+    return {
+      seq: coerceInt(row.seq, 0),
+      event_id: String(row.event_id),
+      peer_id: String(row.peer_id),
+      message_id: row.message_id == null ? null : String(row.message_id),
+      msg_ts: coerceInt(row.msg_ts, 0),
+      unread_count: coerceInt(row.unread_count, 0),
+      preview: String(row.preview || ""),
+      state: String(row.state || ""),
+      source: String(row.source || ""),
+      a2a_message_id: row.a2a_message_id == null ? null : String(row.a2a_message_id),
+      target_session_id: row.target_session_id == null ? null : String(row.target_session_id),
+      target_session_key: row.target_session_key == null ? null : String(row.target_session_key),
+      created_at: coerceInt(row.created_at, 0),
+      updated_at: coerceInt(row.updated_at, 0),
+      payload,
+    };
+  }
 }
 
 module.exports = {

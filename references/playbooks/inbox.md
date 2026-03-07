@@ -7,7 +7,8 @@
 ## 标准流程
 
 ```
-1. inbox.pull 拉取完整事件（不以 preview 摘要为唯一事实）
+1. inbox pull 拉取事件列表（含完整 payload）
+   若需单独查看某条消息，可使用 inbox get --event-id <id>
 
 2. 识别消息类型：
    - message_type = anp.* → ANP 协商消息
@@ -55,6 +56,9 @@
 ```bash
 # 拉取消息，并把本次拉到的 peer 绑定到当前会话
 ./scripts/a2hmarket-cli.sh inbox-pull --consumer openclaw --cursor 0 --max 20 --wait-ms 2000 --source-session-key agent:main:feishu:direct:ou_xxx
+
+# 查看单条完整消息（含完整 payload）
+./scripts/a2hmarket-cli.sh inbox-get --event-id a2hmarket_xxx
 
 # 确认已处理，并把该 peer 后续消息绑定到当前会话
 ./scripts/a2hmarket-cli.sh inbox-ack --consumer openclaw --event-id a2hmarket_xxx --source-session-key agent:main:feishu:direct:ou_xxx

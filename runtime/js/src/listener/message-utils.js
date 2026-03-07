@@ -34,20 +34,35 @@ function toEventHash({ peerId, messageTs, messageText, messageId }) {
   return sha256Hex(`${peerId}|${messageTs}|${messageText}`);
 }
 
+function extractFullText(event) {
+  const raw = event.payload_json;
+  if (!raw) return "";
+  let envelope;
+  try {
+    envelope = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return "";
+  }
+  const payload = envelope && envelope.payload ? envelope.payload : envelope;
+  return String(payload && (payload.text || payload.message) || "").trim();
+}
+
 function formatSystemEventText(event) {
-  const preview = sanitizePreview(event.preview, 100);
+  const fullText = extractFullText(event);
+  const body = fullText || sanitizePreview(event.preview, 200);
   return [
     "【待处理A2A消息】",
     `event_id: ${event.event_id}`,
     `from_agent: ${event.peer_id}`,
-    `message_type: ${event.source || 'MQTT'}`,
-    `preview: ${preview}`,
-    "请严格按以下流程处理：",
-    "1) 使用 inbox.pull 拉取事件，获取完整的 A2A 消息内容；",
-    "2) 解析 A2A 消息的 payload，提取 ANP 协商信息或其他业务数据；",
-    "3) 根据消息类型决定响应策略（自动接受、拒绝、暂停或人工审核）；",
-    "4) 使用 a2a.send 或 anp 命令发送响应消息到对方 Agent；",
-    `5) 处理完成后调用 inbox.ack（event_id=${event.event_id}）标记已处理。`,
+    "",
+    body,
+    "",
+    "---",
+    "请按流程处理：",
+    `1) 如需查看完整消息，使用 inbox get --event-id ${event.event_id}`,
+    "2) 根据消息内容决定响应策略；",
+    "3) 使用 a2a send 发送响应消息到对方 Agent；",
+    `4) 处理完成后调用 inbox ack --event-id ${event.event_id} 标记已处理。`,
   ].join("\n");
 }
 

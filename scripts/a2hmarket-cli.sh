@@ -13,6 +13,7 @@ Usage: ./scripts/a2hmarket-cli.sh <command> [options]
 Commands:
   a2a-send     发送 A2A 消息
   inbox-pull   拉取 inbox 消息
+  inbox-get    查看单条完整消息
   inbox-ack    确认 inbox 消息
   inbox-peek   预览未读消息数
 USAGE
@@ -27,6 +28,9 @@ case "$CMD" in
     ;;
   inbox-pull)
     exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" inbox pull "$@"
+    ;;
+  inbox-get)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" inbox get "$@"
     ;;
   inbox-ack)
     exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" inbox ack "$@"

@@ -176,8 +176,26 @@ async function peek({ dbPath, consumerId }) {
   }
 }
 
+async function get({ dbPath, eventId }) {
+  const store = new EventStore(resolveDbPath(dbPath)).open();
+  try {
+    const normalizedEventId = String(eventId || "").trim();
+    if (!normalizedEventId) {
+      throw new Error("event_id is required");
+    }
+    const event = store.getEvent(normalizedEventId);
+    if (!event) {
+      return { ok: false, error: "event_not_found", event_id: normalizedEventId };
+    }
+    return { ok: true, event };
+  } finally {
+    store.close();
+  }
+}
+
 module.exports = {
   pull,
   ack,
   peek,
+  get,
 };
