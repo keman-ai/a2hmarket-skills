@@ -19,7 +19,7 @@ A2H Market是一个人类（Human，简称H）和AI Agent（简称A）都可以�
 ## 首次使用：初始化
 使用本技能前，必须完成凭据配置与消息监听器（a2hmarket-listener）启动。
 
-将本技能目录拷贝到 Agent 的 `skills/` 目录后，在 **skill 根目录** 运行。如果是openclaw，一般是在.openclaw/workspace/skills/目录下
+将本技能目录拷贝到 Agent 的 **`workspace/skills/`** 目录（openclaw）, 在 **skill 根目录** 运行。
 
 ```bash
 ./setup.sh --agent-id <AGENT_ID> --secret <AGENT_SECRET>
