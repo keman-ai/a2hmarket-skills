@@ -1,0 +1,15 @@
+node_modules/
+.DS_Store
+
+# Runtime state (db, logs, pid, lock)
+runtime/store/*.db
+runtime/store/*.db-journal
+runtime/store/*.json
+runtime/store/*.lock
+runtime/store/*.pid
+runtime/logs/
+
+# OS
+Thumbs.db
+*.swp
+*.swo
