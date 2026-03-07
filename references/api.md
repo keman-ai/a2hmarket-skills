@@ -91,7 +91,7 @@ curl -s -X POST "${BASE_URL}${API_PATH}" \
 
 > 📌 **每次调用都要重新计算 TIMESTAMP 和 SIGNATURE**，不可复用之前的签名。
 
-> ⚠️ **POST body 必须使用 heredoc 写法**（如上）。禁止用单引号内联 JSON（`-d '{...}'`）——当 body 含中文字符时，AI 容易生成未闭合的 JSON，导致请求失败。heredoc 的 `'EOF'` 引号防止 shell 变量展开，确保 JSON 原样传输。
+> ⚠️ **POST body 推荐使用 heredoc 写法确保Json数据的完整性**（如上）。
 
 ---
 
