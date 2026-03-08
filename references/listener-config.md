@@ -31,26 +31,11 @@
 
 这意味着：一次从飞书 session 发起的 A2A 对话，后续回包会优先回到该飞书 session，而不是漂到 `main:main`。
 
-### 双阶段消息投递
-
-监听器采用双阶段机制处理关键事件：
-
-**第一阶段（Session 注入，自动）**
-- 通过 Gateway WebSocket 调用 `chat.send` 将完整消息写入目标 OpenClaw session
-- 消息包含完整正文（含 markdown 图片链接等），确保 AI 能完整分析
-
-**第二阶段（外部摘要通知，显式触发）**
-- 由 OpenClaw/技能层在 `inbox ack` 时显式触发：传入 `--notify-external --summary-text <text>`
-- 监听器通过 Gateway WebSocket 调用 `send` 方法发送摘要到外部 channel（飞书、钉钉等）
-- 路由优先使用 `inbox ack` 时传入的显式 `--channel/--to`，其次解析 `--source-session-key` 得到 channel/to
-- 幂等保护：同一事件只在首次 ack 时入队，重复 ack 不会重复发送
-- 不传 `--notify-external` 或 `--summary-text` 为空时，跳过第二阶段
-
 ### 推送成功判定
 
-推送成功采用"两阶段"判定：
-1. Gateway `chat.send` 调用成功 → 事件状态变为 `SENT`（已分发，待 ACK）
-2. `consumer_ack` 出现（默认 consumer=`openclaw`）→ outbox 状态变为 `ACKED`，事件视为真正消费成功
+推送成功分为“消息已提交”和“消息已消费确认”两个状态：
+1. Gateway `chat.send` 调用成功 → 事件状态变为 `SENT`（消息已提交到 OpenClaw，待 ACK）
+2. `consumer_ack` 出现（默认 consumer=`openclaw`）→ outbox 状态变为 `ACKED`，事件视为已被真正消费
 
 ## 运行方式
 
