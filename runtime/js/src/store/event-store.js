@@ -692,14 +692,14 @@ class EventStore {
 
   // --- summary_outbox methods ---
 
-  enqueueSummaryOutbox({ eventId, sessionKey, channel, to, accountId, threadId, summaryText }) {
+  enqueueSummaryOutbox({ eventId, sessionKey, channel, to, accountId, threadId, summaryText, mediaUrl }) {
     const ts = nowMs();
     try {
       this.db.prepare(`
         INSERT INTO summary_outbox
-          (event_id, session_key, channel, to_target, account_id, thread_id, summary_text,
+          (event_id, session_key, channel, to_target, account_id, thread_id, summary_text, media_url,
            status, attempt, next_retry_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?)
       `).run(
         String(eventId),
         nullableText(sessionKey),
@@ -708,6 +708,7 @@ class EventStore {
         nullableText(accountId),
         nullableText(threadId),
         String(summaryText),
+        nullableText(mediaUrl),
         ts,
         ts,
         ts
@@ -725,7 +726,7 @@ class EventStore {
     const tsNow = coerceInt(now, nowMs());
     return this.db.prepare(`
       SELECT id, event_id, session_key, channel, to_target AS to_target,
-             account_id, thread_id, summary_text, status, attempt, next_retry_at, updated_at
+             account_id, thread_id, summary_text, media_url, status, attempt, next_retry_at, updated_at
       FROM summary_outbox
       WHERE status IN ('PENDING', 'RETRY')
         AND next_retry_at <= ?

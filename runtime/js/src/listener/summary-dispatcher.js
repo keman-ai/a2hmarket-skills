@@ -20,7 +20,12 @@ async function runOpenclawMessageSend(cfg, row) {
   if (row.thread_id) {
     command.push("--thread-id", String(row.thread_id));
   }
-  command.push("--message", String(row.summary_text));
+  if (row.summary_text) {
+    command.push("--message", String(row.summary_text));
+  }
+  if (row.media_url) {
+    command.push("--media", String(row.media_url));
+  }
 
   const started = nowMs();
 

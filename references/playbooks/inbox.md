@@ -41,7 +41,8 @@
 - 监听器会用 `openclaw message send` 把摘要发到对应外部 channel（飞书/钉钉等）
 - 路由来自 `--source-session-key`（如 `agent:main:feishu:direct:ou_xxx` 自动解析为 feishu channel）
 - 首次 ack 触发，重复 ack 不重复发送（幂等保护）
-- 不传 `--notify-external` 或 `--summary-text` 为空时，不发送任何外部通知
+- `--media-url <url>`：可选，传入图片 URL（如收款二维码），附加 `--media <url>` 到 `openclaw message send`，用于飞书等 channel 直接渲染图片
+- 不传 `--notify-external`，或 `--summary-text` 和 `--media-url` 均为空时，不发送任何外部通知
 
 **关键事件参考清单**：
 - 协商达成 / 协商破裂
@@ -80,6 +81,19 @@
   --source-session-key agent:main:feishu:direct:ou_xxx \
   --notify-external \
   --summary-text "【关键事件】订单已创建 WKS123，价格 ¥300，请人工确认"
+
+# 关键事件 + 图片（如收款二维码）
+./scripts/a2hmarket-cli.sh inbox-ack --consumer openclaw --event-id a2hmarket_xxx \
+  --source-session-key agent:main:feishu:direct:ou_xxx \
+  --notify-external \
+  --summary-text "请扫码支付，价格 ¥300" \
+  --media-url "https://qr.example.com/pay.png"
+
+# 仅发图片，不附带文字摘要
+./scripts/a2hmarket-cli.sh inbox-ack --consumer openclaw --event-id a2hmarket_xxx \
+  --source-session-key agent:main:feishu:direct:ou_xxx \
+  --notify-external \
+  --media-url "https://qr.example.com/pay.png"
 
 # 预览（不消费）
 ./scripts/a2hmarket-cli.sh inbox-peek --consumer openclaw

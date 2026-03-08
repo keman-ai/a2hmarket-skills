@@ -569,6 +569,110 @@ test("inbox ack with notify-external uses explicit channel/to over session key p
   }
 });
 
+test("inbox ack with notify-external and media-url enqueues summary with media_url", async () => {
+  const temp = createTempDbPath();
+  const store = new EventStore(temp.dbPath).open();
+
+  try {
+    store.insertIncomingEvent({
+      event_id: "event-media-1",
+      peer_id: "peer-media",
+      message_id: "incoming-media-1",
+      msg_ts: Date.now(),
+      hash: "hash-media-1",
+      unread_count: 1,
+      preview: "收款码",
+      payload: { text: "[![收款二维码](https://qr.example.com/pay.png)](https://pay.example.com)" },
+      state: "NEW",
+      source: "MQTT",
+      a2a_message_id: "incoming-media-1",
+      push_enabled: false,
+    });
+  } finally {
+    store.close();
+  }
+
+  try {
+    const result = await ack({
+      dbPath: temp.dbPath,
+      consumerId: "openclaw",
+      eventId: "event-media-1",
+      sourceSessionKey: "agent:main:feishu:direct:ou_media",
+      notifyExternal: true,
+      summaryText: "订单确认，请扫码支付",
+      mediaUrl: "https://qr.example.com/pay.png",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.summary_enqueued, true);
+
+    const verifyStore = new EventStore(temp.dbPath).open();
+    try {
+      const rows = verifyStore.listPendingSummaryOutbox({ now: Date.now() + 1, batchSize: 5 });
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].channel, "feishu");
+      assert.equal(rows[0].to_target, "ou_media");
+      assert.equal(rows[0].summary_text, "订单确认，请扫码支付");
+      assert.equal(rows[0].media_url, "https://qr.example.com/pay.png");
+    } finally {
+      verifyStore.close();
+    }
+  } finally {
+    fs.rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("inbox ack with only media-url (no summary-text) still enqueues when notify-external", async () => {
+  const temp = createTempDbPath();
+  const store = new EventStore(temp.dbPath).open();
+
+  try {
+    store.insertIncomingEvent({
+      event_id: "event-media-only",
+      peer_id: "peer-media2",
+      message_id: "incoming-media-2",
+      msg_ts: Date.now(),
+      hash: "hash-media-2",
+      unread_count: 1,
+      preview: "收款码",
+      payload: { text: "[![QR](https://qr.example.com/pay2.png)](https://pay.example.com)" },
+      state: "NEW",
+      source: "MQTT",
+      a2a_message_id: "incoming-media-2",
+      push_enabled: false,
+    });
+  } finally {
+    store.close();
+  }
+
+  try {
+    const result = await ack({
+      dbPath: temp.dbPath,
+      consumerId: "openclaw",
+      eventId: "event-media-only",
+      sourceSessionKey: "agent:main:feishu:direct:ou_media2",
+      notifyExternal: true,
+      summaryText: "",
+      mediaUrl: "https://qr.example.com/pay2.png",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.summary_enqueued, true);
+
+    const verifyStore = new EventStore(temp.dbPath).open();
+    try {
+      const rows = verifyStore.listPendingSummaryOutbox({ now: Date.now() + 1, batchSize: 5 });
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].media_url, "https://qr.example.com/pay2.png");
+      assert.equal(rows[0].summary_text, "");
+    } finally {
+      verifyStore.close();
+    }
+  } finally {
+    fs.rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
 test("inbox ack does not let old event override newer peer binding", async () => {
   const temp = createTempDbPath();
   const store = new EventStore(temp.dbPath).open();

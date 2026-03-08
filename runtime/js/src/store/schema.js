@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS summary_outbox (
   account_id TEXT,
   thread_id TEXT,
   summary_text TEXT NOT NULL,
+  media_url TEXT,
   status TEXT NOT NULL DEFAULT 'PENDING',
   attempt INTEGER NOT NULL DEFAULT 0,
   next_retry_at INTEGER NOT NULL,
@@ -176,6 +177,7 @@ function applySchema(db) {
         account_id TEXT,
         thread_id TEXT,
         summary_text TEXT NOT NULL,
+        media_url TEXT,
         status TEXT NOT NULL DEFAULT 'PENDING',
         attempt INTEGER NOT NULL DEFAULT 0,
         next_retry_at INTEGER NOT NULL,
@@ -188,6 +190,8 @@ function applySchema(db) {
       CREATE INDEX IF NOT EXISTS idx_summary_outbox_status_retry
         ON summary_outbox(status, next_retry_at);
     `);
+  } else if (!columnExists(db, "summary_outbox", "media_url")) {
+    db.exec("ALTER TABLE summary_outbox ADD COLUMN media_url TEXT;");
   }
 }
 

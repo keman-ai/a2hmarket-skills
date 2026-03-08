@@ -113,6 +113,7 @@ async function ack({
   sourceSessionKey,
   notifyExternal,
   summaryText,
+  mediaUrl,
   channel,
   to,
   accountId,
@@ -125,11 +126,13 @@ async function ack({
     const normalizedSourceSessionId = String(sourceSessionId || "").trim();
     const normalizedSourceSessionKey = String(sourceSessionKey || "").trim();
     const normalizedSummaryText = String(summaryText || "").trim();
+    const normalizedMediaUrl = String(mediaUrl || "").trim();
     const normalizedChannel = String(channel || "").trim();
     const normalizedTo = String(to || "").trim();
     const normalizedAccountId = String(accountId || "").trim();
     const normalizedThreadId = String(threadId || "").trim();
-    const doNotify = Boolean(notifyExternal) && normalizedSummaryText.length > 0;
+    // Allow notify when summary text or media_url is present
+    const doNotify = Boolean(notifyExternal) && (normalizedSummaryText.length > 0 || normalizedMediaUrl.length > 0);
 
     if (!normalizedEventId) {
       throw new Error("event_id is required");
@@ -191,6 +194,7 @@ async function ack({
           accountId: normalizedAccountId || null,
           threadId: normalizedThreadId || null,
           summaryText: normalizedSummaryText,
+          mediaUrl: normalizedMediaUrl || null,
         });
         summaryEnqueued = enqueueResult.inserted === true;
         if (!summaryEnqueued) {
@@ -201,7 +205,7 @@ async function ack({
       }
     } else if (doNotify && ackResult.inserted !== true) {
       summarySkipReason = "already_acked";
-    } else if (Boolean(notifyExternal) && !normalizedSummaryText) {
+    } else if (Boolean(notifyExternal) && !normalizedSummaryText && !normalizedMediaUrl) {
       summarySkipReason = "no_summary_text";
     }
 
