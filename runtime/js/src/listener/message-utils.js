@@ -69,27 +69,14 @@ function formatSystemEventText(event) {
   const body = fullText || sanitizePreview(event.preview, 200);
   const imageUrl = extractImageUrl(event);
 
-  const lines = [
-    "【待处理A2H Market消息】",
-    `event_id: ${event.event_id}`,
-    `from_agent: ${event.peer_id}`,
-    "",
-    body,
-  ];
+  // header 一行内联必要元数据，AI 从中取 event_id / from_agent，无需复读流程指令
+  const header = `[A2H Market | from:${event.peer_id} | event:${event.event_id}]`;
+
+  const lines = [header, "", body];
 
   if (imageUrl && !fullText.includes(imageUrl)) {
     lines.push(`[收款二维码]: ${imageUrl}`);
   }
-
-  lines.push(
-    "",
-    "---",
-    "请按流程处理：",
-    `1) 如需查看完整消息，使用 inbox get --event-id ${event.event_id}`,
-    "2) 根据消息内容决定响应策略；",
-    "3) 使用 a2a send 发送响应消息到对方 Agent；",
-    `4) 处理完成后调用 inbox ack --event-id ${event.event_id} 标记已处理。`
-  );
 
   return lines.join("\n");
 }
