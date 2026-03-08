@@ -63,14 +63,16 @@ fi
 echo "[setup] 📦 Step 2/3: 安装 Node.js 依赖 ..."
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "[setup] ❌ 未找到 node，请先安装 Node.js >= 22.0.0" >&2
+  echo "[setup] ❌ 未找到 node，请先安装 Node.js >= 14.0.0" >&2
   exit 1
 fi
 
 node_version=$(node -e "process.stdout.write(process.versions.node)" 2>/dev/null || echo "0")
 major_version="${node_version%%.*}"
-if [[ "$major_version" -lt 22 ]]; then
-  echo "[setup] ⚠️  Node.js 版本 $node_version 低于要求的 22.0.0，可能存在兼容性问题" >&2
+if [[ "$major_version" -lt 14 ]]; then
+  echo "[setup] ❌ Node.js 版本 $node_version 低于要求的 14.0.0（运行时使用 better-sqlite3，需 Node 14+）" >&2
+  echo "[setup]    请升级 Node 后重试: https://nodejs.org/" >&2
+  exit 1
 fi
 
 cd "$ROOT_DIR"

@@ -1,6 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const { DatabaseSync } = require("node:sqlite");
+const Database = require("better-sqlite3");
 const { applySchema } = require("./schema");
 
 function nowMs() {
@@ -46,8 +46,8 @@ class EventStore {
   open() {
     if (this.db) return this;
     fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
-    this.db = new DatabaseSync(this.dbPath);
-    this.db.exec("PRAGMA busy_timeout = 5000");
+    this.db = new Database(this.dbPath);
+    this.db.pragma("busy_timeout = 5000");
     applySchema(this.db);
     return this;
   }

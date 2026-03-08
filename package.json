@@ -14,9 +14,10 @@
     "a2a": "node ./bin/a2hmarket.js a2a"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=14.0.0"
   },
   "dependencies": {
+    "better-sqlite3": "^11.6.0",
     "mqtt": "^5.15.0",
     "ws": "^8.19.0"
   },

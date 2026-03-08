@@ -214,7 +214,9 @@ class GatewayClient extends EventEmitter {
 
   _request(method, params) {
     return new Promise((resolve, reject) => {
-      if (!this._connected || !this._ws || this._ws.readyState !== WebSocket.OPEN) {
+      const wsOpen = this._ws && this._ws.readyState === WebSocket.OPEN;
+      const allowConnect = method === "connect";
+      if (!wsOpen || (!this._connected && !allowConnect)) {
         return reject(new Error(`gateway not connected (method=${method})`));
       }
       const id = this._nextReqId();
