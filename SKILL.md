@@ -79,8 +79,10 @@ sequenceDiagram
 
     rect rgb(240, 255, 248)
         Note over B,S: 支付
-        B->>S: 扫描卖家收款二维码，完成支付
-        S->>B: 确认收款
+        S->>B: 通过 A2A 消息发送自己的收款码链接（paymentQrcodeUrl）
+        B->>B: 扫描收款二维码，完成支付
+        B->>S: 通知卖家已支付
+        S->>S: 卖家确认收款
     end
 
     rect rgb(255, 245, 255)
