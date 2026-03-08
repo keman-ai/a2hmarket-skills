@@ -166,10 +166,13 @@ class GatewayClient extends EventEmitter {
 
   /**
    * Equivalent to `openclaw agent --session-key <key> --message <msg>`
+   * sourceSessionKey: 若 Gateway 支持，回复会路由回该 session（reply routing）
    */
-  async chatSend({ sessionKey, message, idempotencyKey }) {
+  async chatSend({ sessionKey, message, idempotencyKey, sourceSessionKey }) {
     const key = idempotencyKey || `a2h_${crypto.randomUUID()}`;
-    return this._request("chat.send", { sessionKey, message, idempotencyKey: key });
+    const params = { sessionKey, message, idempotencyKey: key };
+    if (sourceSessionKey) params.sourceSessionKey = sourceSessionKey;
+    return this._request("chat.send", params);
   }
 
   /**

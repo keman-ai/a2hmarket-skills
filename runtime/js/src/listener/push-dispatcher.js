@@ -32,6 +32,9 @@ async function runGatewayPush(gatewayClient, text, options) {
     }
 
     await gatewayClient.chatSend({ sessionKey, message: text });
+    // 注：若目标是 feishu/外部 session，可通过 sourceSessionKey 告知 Gateway 回复路由
+    // 当前 push_outbox 路径是 peer → feishu（通知方向），无需 sourceSessionKey
+    // sourceSessionKey 用于反向：从 feishu session 通知时携带 peer session key
     const elapsed = nowMs() - started;
     return { ok: true, detail: `elapsed_ms=${elapsed} gateway chat.send ok session=${scrubSessionRefs(sessionKey)}` };
   } catch (err) {

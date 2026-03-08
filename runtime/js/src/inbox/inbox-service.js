@@ -22,8 +22,10 @@ function appendReplyRoute(summaryText, sourceSessionKey, eventId) {
     "【a2hmarket 回复路由】",
     `source_session_key: ${sourceSessionKey}`,
     `event_id: ${eventId || "-"}`,
-    "收到人类决策后，请使用以下命令将决策转发回 peer session：",
-    `  openclaw agent --session-key "${sourceSessionKey}" --message "Human决策: <决策内容>"`,
+    "收到人类决策后，请将决策转发回 peer session（选一种方式）：",
+    `  方式一（推荐）：openclaw acp --session "${sourceSessionKey}"`,
+    `    然后在交互中输入决策内容`,
+    `  方式二（单次）：向 peer session 发送 chat.send 消息`,
   ].join("\n");
   return body + routeBlock;
 }
