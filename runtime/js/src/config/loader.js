@@ -11,10 +11,6 @@ const {
 const {
   DEFAULT_OPENCLAW_SESSION_KEY,
   DEFAULT_OPENCLAW_SESSION_LABEL,
-  looksLikeSessionKey,
-  looksLikeUuid,
-  resolveOpenclawCommand,
-  ensureOpenclawSessionBinding,
   writeOpenclawSessionState,
 } = require("./openclaw-session");
 
@@ -124,9 +120,6 @@ function resolveListenerConfig() {
     A2HMARKET_PUSH_ENABLED: "true",
     A2HMARKET_OPENCLAW_SESSION_LABEL: "",
     A2HMARKET_OPENCLAW_SESSION_STRICT: "true",
-    A2HMARKET_OPENCLAW_BIN: "openclaw",
-    A2HMARKET_OPENCLAW_PUSH_TIMEOUT_SEC: "120",
-    A2HMARKET_OPENCLAW_PUSH_THINKING: "off",
     A2HMARKET_PUSH_ONCE: "true",
     A2HMARKET_MQTT_TOKEN_BASE_URL: baseUrl,
     A2HMARKET_MQTT_ENDPOINT: "post-cn-e4k4o78q702.mqtt.aliyuncs.com",
@@ -154,56 +147,11 @@ function resolveListenerConfig() {
     return value;
   };
 
-  let pushEnabled = parseBool(pickWithDefault("A2HMARKET_PUSH_ENABLED"), true);
+  const pushEnabled = parseBool(pickWithDefault("A2HMARKET_PUSH_ENABLED"), true);
 
-  const openclawBin = pickWithDefault("A2HMARKET_OPENCLAW_BIN");
-  const openclawNodeScript = pick("A2HMARKET_OPENCLAW_NODE_SCRIPT", "") || null;
-  const openclawCommand = pushEnabled
-    ? resolveOpenclawCommand(openclawBin, openclawNodeScript)
-    : [];
   const openclawSessionLabel = pickWithDefault("A2HMARKET_OPENCLAW_SESSION_LABEL");
   const openclawSessionStrict = parseBool(pickWithDefault("A2HMARKET_OPENCLAW_SESSION_STRICT"), true);
   const openclawSessionKeyRaw = DEFAULT_OPENCLAW_SESSION_KEY;
-  let openclawSessionId = "";
-  let openclawSessionKeyCanonical = "";
-  let openclawSessionBootstrapError = "";
-  let openclawSessionBootstrapStatePath = "";
-
-  if (pushEnabled) {
-    const ensured = ensureOpenclawSessionBinding({
-      openclawCommand,
-      sessionKey: openclawSessionKeyRaw,
-      sessionLabel: openclawSessionLabel,
-    });
-    if (ensured.ok) {
-      openclawSessionId = ensured.sessionId;
-      openclawSessionKeyCanonical = ensured.canonicalKey;
-    } else if (openclawSessionStrict) {
-      throw new Error(
-        `failed to bootstrap OpenClaw session (key=${openclawSessionKeyRaw}): ${ensured.detail}`
-      );
-    } else {
-      pushEnabled = false;
-      openclawSessionBootstrapError = String(ensured.detail || "session bootstrap failed");
-    }
-  }
-
-  if (pushEnabled && !openclawSessionId) {
-    throw new Error("failed to resolve OpenClaw push session id while push is enabled");
-  }
-
-  if (openclawSessionKeyRaw) {
-    openclawSessionBootstrapStatePath = writeOpenclawSessionState({
-      key: openclawSessionKeyRaw,
-      canonicalKey: openclawSessionKeyCanonical || openclawSessionKeyRaw,
-      sessionId: openclawSessionId || "",
-      label: openclawSessionLabel,
-      strict: openclawSessionStrict,
-      pushEnabled,
-      bootstrapError: openclawSessionBootstrapError || "",
-      updatedAtMs: nowMs(),
-    });
-  }
   const mqttTokenBaseUrl = pickWithDefault("A2HMARKET_MQTT_TOKEN_BASE_URL").replace(/\/+$/, "");
 
   return {
@@ -256,21 +204,11 @@ function resolveListenerConfig() {
     pidPath: resolvePath(pick("A2HMARKET_LISTENER_PID_FILE", DEFAULT_PID_PATH), DEFAULT_PID_PATH),
     pollIntervalMs: parseIntBound(pickWithDefault("A2HMARKET_POLL_INTERVAL_MS"), 5000, 500),
     pushEnabled,
-    openclawCommand,
-    openclawSessionId,
     openclawSessionKey: openclawSessionKeyRaw,
-    openclawSessionKeyCanonical,
     openclawSessionLabel,
     openclawSessionStrict,
-    openclawSessionBootstrapError,
-    openclawSessionBootstrapStatePath,
-    openclawPushThinking: pickWithDefault("A2HMARKET_OPENCLAW_PUSH_THINKING"),
-    openclawPushTimeoutSec: parseIntBound(
-      pickWithDefault("A2HMARKET_OPENCLAW_PUSH_TIMEOUT_SEC"),
-      120,
-      30,
-      1800
-    ),
+    openclawSessionId: "",
+    openclawSessionKeyCanonical: "",
     pushAckConsumer: pickWithDefault("A2HMARKET_PUSH_ACK_CONSUMER"),
     pushAckWaitMs: parseIntBound(
       pickWithDefault("A2HMARKET_PUSH_ACK_WAIT_MS"),

@@ -1,4 +1,5 @@
-const { resolveDbPath } = require("../config/paths");
+const fs = require("node:fs");
+const { resolveDbPath, DEFAULT_PID_PATH } = require("../config/paths");
 const { EventStore, nowMs } = require("../store/event-store");
 const { parseDeliveryHintsFromSessionKey } = require("../config/openclaw-routing");
 
@@ -257,9 +258,57 @@ async function get({ dbPath, eventId }) {
   }
 }
 
+function isListenerAlive(pidPath) {
+  const resolvedPidPath = String(pidPath || process.env.A2HMARKET_LISTENER_PID_FILE || DEFAULT_PID_PATH).trim();
+  try {
+    if (!fs.existsSync(resolvedPidPath)) return false;
+    const pid = Number.parseInt(fs.readFileSync(resolvedPidPath, "utf8").trim(), 10);
+    if (!Number.isFinite(pid) || pid <= 0) return false;
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function check({ dbPath, consumerId, pidPath }) {
+  const store = new EventStore(resolveDbPath(dbPath)).open();
+  try {
+    const normalizedConsumer = String(consumerId || "default");
+    const status = store.checkStatus({ consumerId: normalizedConsumer });
+    const tsNow = nowMs();
+    const oldestAgeMs =
+      status.oldest_unread_at != null ? Math.max(0, tsNow - status.oldest_unread_at) : null;
+    const alive = isListenerAlive(pidPath);
+
+    const parts = [];
+    if (status.unread > 0) {
+      const ageStr = oldestAgeMs != null ? ` (oldest ${Math.round(oldestAgeMs / 1000)}s ago)` : "";
+      parts.push(`${status.unread} unread${ageStr}`);
+    } else {
+      parts.push("0 unread");
+    }
+    if (status.pending_push > 0) parts.push(`${status.pending_push} pending push`);
+    parts.push(alive ? "listener running" : "listener not running");
+
+    return {
+      ok: true,
+      has_pending: status.unread > 0,
+      unread_count: status.unread,
+      pending_push_count: status.pending_push,
+      oldest_unread_age_ms: oldestAgeMs,
+      listener_alive: alive,
+      summary: parts.join(", "),
+    };
+  } finally {
+    store.close();
+  }
+}
+
 module.exports = {
   pull,
   ack,
   peek,
   get,
+  check,
 };

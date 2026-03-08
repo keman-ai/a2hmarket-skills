@@ -1,4 +1,3 @@
-const { spawn } = require("node:child_process");
 const { nowMs } = require("../store/event-store");
 const { coerceInt } = require("./message-utils");
 
@@ -9,90 +8,25 @@ function calculateBackoffMs(attempt, maxDelayMs) {
   return Math.max(1000, capped);
 }
 
-async function runOpenclawMessageSend(cfg, row) {
-  const timeoutSec = Math.max(30, coerceInt(cfg.openclawPushTimeoutSec, 60));
-  const command = [...cfg.openclawCommand, "message", "send"];
-  command.push("--channel", String(row.channel));
-  command.push("--target", String(row.to_target));
-  if (row.account_id) {
-    command.push("--account", String(row.account_id));
-  }
-  if (row.thread_id) {
-    command.push("--thread-id", String(row.thread_id));
-  }
-  if (row.summary_text) {
-    command.push("--message", String(row.summary_text));
-  }
-  if (row.media_url) {
-    command.push("--media", String(row.media_url));
-  }
-
+async function runGatewaySend(gatewayClient, row) {
   const started = nowMs();
-
-  return new Promise((resolve) => {
-    let stdout = "";
-    let stderr = "";
-    let timeoutHandle = null;
-    let exited = false;
-
-    const child = spawn(command[0], command.slice(1), {
-      encoding: "utf8",
-      maxBuffer: 512 * 1024,
-    });
-
-    const cleanup = () => {
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-        timeoutHandle = null;
-      }
-      if (!exited) {
-        exited = true;
-        try {
-          child.kill("SIGTERM");
-        } catch {}
-      }
+  try {
+    const params = {
+      channel: String(row.channel),
+      to: String(row.to_target),
     };
+    if (row.account_id) params.accountId = String(row.account_id);
+    if (row.thread_id) params.threadId = String(row.thread_id);
+    if (row.summary_text) params.message = String(row.summary_text);
+    if (row.media_url) params.mediaUrl = String(row.media_url);
 
-    child.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    child.on("error", (err) => {
-      cleanup();
-      const elapsed = nowMs() - started;
-      resolve({
-        ok: false,
-        detail: `elapsed_ms=${elapsed} ${err.message || String(err)}`.trim(),
-      });
-    });
-
-    child.on("exit", (code) => {
-      cleanup();
-      exited = true;
-      const elapsed = nowMs() - started;
-      const output = `${stdout}\n${stderr}`.trim().slice(0, 500);
-      if (code === 0) {
-        resolve({ ok: true, detail: `elapsed_ms=${elapsed} ${output}`.trim() });
-      } else {
-        resolve({ ok: false, detail: `elapsed_ms=${elapsed} exit=${code} ${output}`.trim() });
-      }
-    });
-
-    timeoutHandle = setTimeout(() => {
-      if (!exited) {
-        cleanup();
-        const elapsed = nowMs() - started;
-        resolve({
-          ok: false,
-          detail: `elapsed_ms=${elapsed} timeout after ${timeoutSec}s`,
-        });
-      }
-    }, (timeoutSec + 10) * 1000);
-  });
+    await gatewayClient.send(params);
+    const elapsed = nowMs() - started;
+    return { ok: true, detail: `elapsed_ms=${elapsed} gateway send ok channel=${row.channel}` };
+  } catch (err) {
+    const elapsed = nowMs() - started;
+    return { ok: false, detail: `elapsed_ms=${elapsed} ${err.message || String(err)}`.trim() };
+  }
 }
 
 async function flushSummaryOutbox(store, cfg, logger, options) {
@@ -100,10 +34,11 @@ async function flushSummaryOutbox(store, cfg, logger, options) {
     return { sent: 0, retried: 0, failed: 0 };
   }
   const nowFn = options && typeof options.now === "function" ? options.now : nowMs;
-  const sendFn =
-    options && typeof options.send === "function"
-      ? options.send
-      : runOpenclawMessageSend;
+  const gatewayClient = options && options.gatewayClient;
+  const sendFn = options && typeof options.send === "function"
+    ? options.send
+    : (_, row) => runGatewaySend(gatewayClient, row);
+
   const batchSize = coerceInt(cfg.pushBatchSize, 20);
   const maxRetries = coerceInt(cfg.summaryMaxRetries, 5);
   const rows = store.listPendingSummaryOutbox({

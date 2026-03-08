@@ -5,7 +5,66 @@ const { flushSummaryOutbox } = require("./summary-dispatcher");
 const { acquireSingleInstanceLock } = require("./lock");
 const { startA2aService } = require("../a2a/service");
 const { formatSessionRef } = require("../utils/session-ref");
+const { GatewayClient } = require("../gateway/gateway-client");
+const {
+  looksLikeSessionKey,
+  looksLikeUuid,
+  writeOpenclawSessionState,
+} = require("../config/openclaw-session");
 
+async function bootstrapSession(gw, cfg, logger) {
+  const sessionKey = cfg.openclawSessionKey;
+  if (!sessionKey || !looksLikeSessionKey(sessionKey)) {
+    return { ok: false, detail: `invalid session key: ${sessionKey}` };
+  }
+
+  try {
+    const result = await gw.sessionsPatch({
+      key: sessionKey,
+      label: cfg.openclawSessionLabel || undefined,
+    });
+
+    const sessionId = String(result?.entry?.sessionId || "").trim();
+    const canonicalKey = String(result?.key || "").trim() || sessionKey;
+
+    if (!sessionId || !looksLikeUuid(sessionId)) {
+      return { ok: false, detail: `sessions.patch returned invalid sessionId for key=${canonicalKey}` };
+    }
+
+    cfg.openclawSessionId = sessionId;
+    cfg.openclawSessionKeyCanonical = canonicalKey;
+
+    writeOpenclawSessionState({
+      key: sessionKey,
+      canonicalKey,
+      sessionId,
+      label: cfg.openclawSessionLabel || "",
+      strict: cfg.openclawSessionStrict,
+      pushEnabled: cfg.pushEnabled,
+      bootstrapError: "",
+      updatedAtMs: nowMs(),
+    });
+
+    logger.info(`session bootstrap ok key=${canonicalKey} session_id=${sessionId}`);
+    return { ok: true, sessionId, canonicalKey };
+  } catch (err) {
+    const detail = String(err?.message || err);
+    if (/label already in use/i.test(detail)) {
+      try {
+        const retry = await gw.sessionsPatch({ key: sessionKey });
+        const sessionId = String(retry?.entry?.sessionId || "").trim();
+        const canonicalKey = String(retry?.key || "").trim() || sessionKey;
+        if (sessionId && looksLikeUuid(sessionId)) {
+          cfg.openclawSessionId = sessionId;
+          cfg.openclawSessionKeyCanonical = canonicalKey;
+          logger.info(`session bootstrap ok (label retry) key=${canonicalKey} session_id=${sessionId}`);
+          return { ok: true, sessionId, canonicalKey };
+        }
+      } catch {}
+    }
+    return { ok: false, detail };
+  }
+}
 
 async function runListener(cfg, options) {
   const store = new EventStore(cfg.dbPath).open();
@@ -13,6 +72,37 @@ async function runListener(cfg, options) {
   const logger = options.logger;
   const lock = acquireSingleInstanceLock(cfg.lockPath);
   const a2aService = await startA2aService({ cfg, store, logger });
+
+  let gw = null;
+  if (cfg.pushEnabled) {
+    gw = new GatewayClient({ logger });
+    try {
+      await gw.connect();
+    } catch (err) {
+      if (cfg.openclawSessionStrict) {
+        store.close();
+        lock.release();
+        throw new Error(`gateway connect failed: ${err.message}`);
+      }
+      logger.warn(`gateway connect failed, push disabled: ${err.message}`);
+      cfg.pushEnabled = false;
+    }
+
+    if (cfg.pushEnabled) {
+      const boot = await bootstrapSession(gw, cfg, logger);
+      if (!boot.ok) {
+        if (cfg.openclawSessionStrict) {
+          gw.disconnect();
+          store.close();
+          lock.release();
+          throw new Error(`session bootstrap failed: ${boot.detail}`);
+        }
+        logger.warn(`session bootstrap failed, push disabled: ${boot.detail}`);
+        cfg.pushEnabled = false;
+      }
+    }
+  }
+
   let stopRequested = false;
   let consecutiveFailures = 0;
   const MAX_CONSECUTIVE_FAILURES = 10;
@@ -24,7 +114,7 @@ async function runListener(cfg, options) {
   process.on("SIGTERM", stop);
 
   logger.info(
-    `listener started (a2a-only) db=${cfg.dbPath} flush_interval_ms=${cfg.pollIntervalMs || 5000} push_enabled=${cfg.pushEnabled} session=${cfg.pushEnabled ? formatSessionRef(cfg.openclawSessionKey, cfg.openclawSessionId) : "-"}`
+    `listener started db=${cfg.dbPath} flush_interval_ms=${cfg.pollIntervalMs || 5000} push_enabled=${cfg.pushEnabled} session=${cfg.pushEnabled ? formatSessionRef(cfg.openclawSessionKey, cfg.openclawSessionId) : "-"} gateway=${gw ? "connected" : "off"}`
   );
   try {
     while (!stopRequested) {
@@ -42,7 +132,7 @@ async function runListener(cfg, options) {
       };
       
       try {
-        const pushStats = await flushPushOutbox(store, cfg, logger);
+        const pushStats = await flushPushOutbox(store, cfg, logger, { gatewayClient: gw });
         stats.pushDispatched = pushStats.dispatched;
         stats.pushAcked = pushStats.acked;
         stats.pushRetried = pushStats.retried;
@@ -74,7 +164,7 @@ async function runListener(cfg, options) {
       }
 
       try {
-        const summaryStats = await flushSummaryOutbox(store, cfg, logger);
+        const summaryStats = await flushSummaryOutbox(store, cfg, logger, { gatewayClient: gw });
         stats.summarySent = summaryStats.sent;
         stats.summaryRetried = summaryStats.retried;
         stats.summaryFailed = summaryStats.failed;
@@ -102,6 +192,7 @@ async function runListener(cfg, options) {
       await new Promise((resolve) => setTimeout(resolve, sleepMs));
     }
   } finally {
+    if (gw) gw.disconnect();
     await a2aService.stop();
     store.close();
     lock.release();

@@ -11,11 +11,13 @@ if [[ -z "$CMD" ]]; then
 Usage: ./scripts/a2hmarket-cli.sh <command> [options]
 
 Commands:
-  a2a-send     发送 A2A 消息
-  inbox-pull   拉取 inbox 消息
-  inbox-get    查看单条完整消息
-  inbox-ack    确认 inbox 消息
-  inbox-peek   预览未读消息数
+  a2a-send      发送 A2A 消息
+  inbox-pull    拉取 inbox 消息
+  inbox-get     查看单条完整消息
+  inbox-ack     确认 inbox 消息
+  inbox-peek    预览未读消息数
+  inbox-check   收件箱状态检查（心跳用）
+  sync          同步自身信息（profile + works）
 USAGE
   exit 1
 fi
@@ -37,6 +39,12 @@ case "$CMD" in
     ;;
   inbox-peek)
     exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" inbox peek "$@"
+    ;;
+  inbox-check)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" inbox check "$@"
+    ;;
+  sync)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" sync "$@"
     ;;
   *)
     echo "unknown command: $CMD" >&2

@@ -5,7 +5,6 @@ const { MqttTokenClient } = require("../adapters/mqtt-token-client");
 const { buildEnvelope, signEnvelope } = require("../protocol/a2a-protocol");
 const { getListenerProcess, enqueueOutboundEnvelope } = require("../a2a/outbound-queue");
 const { formatSessionRef, scrubSessionRefs } = require("../utils/session-ref");
-const { listOpenclawSessions } = require("../config/openclaw-routing");
 
 function printUsage() {
   process.stdout.write(
@@ -125,23 +124,6 @@ async function runA2aSend(options) {
   );
   const listener = getListenerProcess(cfg.lockPath);
   if (listener.running) {
-    const sessionProbe = listOpenclawSessions({
-      openclawCommand: cfg.openclawCommand,
-    });
-    if (sessionProbe.ok) {
-      const keys = sessionProbe.sessions
-        .map((session) => String(session.key || session.sessionId || "-"))
-        .slice(0, 5)
-        .join(",");
-      logger.info(
-        `a2a send session probe ok count=${sessionProbe.sessions.length} samples=${keys || "-"}`
-      );
-    } else {
-      logger.warn(
-        `a2a send session probe failed detail=${scrubSessionRefs(sessionProbe.detail || "unknown")}`
-      );
-    }
-
     const queued = enqueueOutboundEnvelope({
       cfg,
       targetAgentId,

@@ -292,6 +292,29 @@ class EventStore {
     };
   }
 
+  checkStatus({ consumerId }) {
+    const unreadRow = this.db.prepare(`
+      SELECT COUNT(1) AS c, MIN(e.created_at) AS oldest
+      FROM message_event e
+      LEFT JOIN consumer_ack a
+        ON a.event_id = e.event_id
+       AND a.consumer_id = ?
+      WHERE a.event_id IS NULL
+    `).get(String(consumerId));
+
+    const pendingRow = this.db.prepare(`
+      SELECT COUNT(1) AS c
+      FROM push_outbox
+      WHERE status IN ('PENDING', 'RETRY', 'SENT')
+    `).get();
+
+    return {
+      unread: coerceInt(unreadRow && unreadRow.c, 0),
+      oldest_unread_at: unreadRow && unreadRow.oldest ? coerceInt(unreadRow.oldest, null) : null,
+      pending_push: coerceInt(pendingRow && pendingRow.c, 0),
+    };
+  }
+
   enqueueA2aOutbox(input) {
     const tsNow = nowMs();
     const messageId = String(input.message_id || "").trim();

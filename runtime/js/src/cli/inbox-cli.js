@@ -1,4 +1,4 @@
-const { pull, ack, peek, get } = require("../inbox/inbox-service");
+const { pull, ack, peek, get, check } = require("../inbox/inbox-service");
 const { parseOptions } = require("./arg-parser");
 
 function printUsage() {
@@ -10,6 +10,7 @@ function printUsage() {
       "                      [--notify-external] [--summary-text <text>] [--media-url <url>] [--channel <ch>] [--to <target>] [--account-id <id>] [--thread-id <id>] [--db-path <path>]",
       "  a2hmarket inbox peek [--consumer <id>] [--db-path <path>]",
       "  a2hmarket inbox get --event-id <id> [--db-path <path>]",
+      "  a2hmarket inbox check [--consumer <id>] [--db-path <path>]",
     ].join("\n") + "\n"
   );
 }
@@ -70,6 +71,15 @@ async function runInboxCli(args) {
       const result = await get({
         dbPath: options["db-path"],
         eventId: options["event-id"],
+      });
+      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+      return 0;
+    }
+
+    if (command === "check") {
+      const result = await check({
+        dbPath: options["db-path"],
+        consumerId: options.consumer,
       });
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       return 0;

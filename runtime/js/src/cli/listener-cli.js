@@ -4,7 +4,7 @@ const { parseOptions } = require("./arg-parser");
 const { createLogger } = require("../listener/logger");
 const { checkListenerStatus, cleanStaleLock } = require("../listener/lock");
 const { DEFAULT_LOCK_PATH, resolvePath } = require("../config/paths");
-const { formatSessionRef, scrubSessionRefs } = require("../utils/session-ref");
+const { scrubSessionRefs } = require("../utils/session-ref");
 
 function printUsage() {
   process.stdout.write(
@@ -127,10 +127,8 @@ async function runListenerCli(args) {
     logger.info(`credential source=static agent_id=${cfg.agentId}`);
     if (cfg.pushEnabled) {
       logger.info(
-        `openclaw push enabled default_session=${formatSessionRef(cfg.openclawSessionKey, cfg.openclawSessionId)} routing=dynamic`
+        `openclaw push enabled session_key=${cfg.openclawSessionKey || "-"} gateway=websocket`
       );
-    } else if (cfg.openclawSessionBootstrapError) {
-      logger.warn(`openclaw push disabled: ${scrubSessionRefs(cfg.openclawSessionBootstrapError)}`);
     }
     const code = await runListener(cfg, {
       once: Boolean(options.once),

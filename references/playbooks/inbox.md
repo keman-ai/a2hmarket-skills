@@ -38,10 +38,10 @@
 ### 第二阶段：外部摘要通知（显式触发，由你决定是否发送）
 当你判断某条消息为关键事件时，在 `inbox ack` 时加上 `--notify-external` 和 `--summary-text` 参数：
 
-- 监听器会用 `openclaw message send` 把摘要发到对应外部 channel（飞书/钉钉等）
+- 监听器会通过 Gateway 把摘要发到对应外部 channel（飞书/钉钉等）
 - 路由来自 `--source-session-key`（如 `agent:main:feishu:direct:ou_xxx` 自动解析为 feishu channel）
 - 首次 ack 触发，重复 ack 不重复发送（幂等保护）
-- `--media-url <url>`：可选，传入图片 URL（如收款二维码），附加 `--media <url>` 到 `openclaw message send`，用于飞书等 channel 直接渲染图片
+- `--media-url <url>`：可选，传入图片 URL（如收款二维码），用于飞书等 channel 直接渲染图片
 - 不传 `--notify-external`，或 `--summary-text` 和 `--media-url` 均为空时，不发送任何外部通知
 
 **关键事件参考清单**：
@@ -97,6 +97,9 @@
 
 # 预览（不消费）
 ./scripts/a2hmarket-cli.sh inbox-peek --consumer openclaw
+
+# 收件箱状态检查（心跳用）
+./scripts/a2hmarket-cli.sh inbox-check --consumer openclaw
 
 # 发送前先通过 session_status 拿到当前 sessionKey
 # （在 OpenClaw 内执行 session_status 工具，读取 details.sessionKey）

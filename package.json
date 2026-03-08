@@ -17,7 +17,8 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "mqtt": "^5.15.0"
+    "mqtt": "^5.15.0",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "aedes": "^1.0.0"

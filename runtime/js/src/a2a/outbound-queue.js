@@ -1,11 +1,7 @@
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 const { EventStore } = require("../store/event-store");
-const {
-  MAIN_SESSION_KEY,
-  listOpenclawSessions,
-  pickSourceSession,
-} = require("../config/openclaw-routing");
+const { MAIN_SESSION_KEY } = require("../config/openclaw-routing");
 
 function isProcessRunning(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -57,7 +53,7 @@ function getListenerProcess(lockPath) {
   };
 }
 
-function resolveOutboundSourceSession({ cfg, sourceSessionId, sourceSessionKey, nowMs }) {
+function resolveOutboundSourceSession({ cfg, sourceSessionId, sourceSessionKey }) {
   const explicitSessionId = String(sourceSessionId || "").trim();
   const explicitSessionKey = String(sourceSessionKey || "").trim();
   if (explicitSessionId || explicitSessionKey) {
@@ -70,29 +66,12 @@ function resolveOutboundSourceSession({ cfg, sourceSessionId, sourceSessionKey, 
     };
   }
 
-  const listed = listOpenclawSessions({
-    openclawCommand: cfg.openclawCommand,
-  });
-  const resolved = pickSourceSession({
-    sessions: listed.sessions,
-    preferredSessionId: "",
-    preferredSessionKey: "",
-    fallbackSessionId: cfg.openclawSessionId,
-    fallbackSessionKey: MAIN_SESSION_KEY,
-    nowMs,
-  });
-  if (!listed.ok && resolved.source === "fallback") {
-    return {
-      ...resolved,
-      source: "fallback-session-list-failed",
-      lookupOk: false,
-      lookupDetail: listed.detail,
-    };
-  }
   return {
-    ...resolved,
-    lookupOk: listed.ok,
-    lookupDetail: listed.detail,
+    sessionId: cfg.openclawSessionId || "",
+    sessionKey: MAIN_SESSION_KEY,
+    source: "fallback",
+    lookupOk: true,
+    lookupDetail: "no explicit session, using fallback",
   };
 }
 
@@ -116,7 +95,6 @@ function enqueueOutboundEnvelope({
       cfg,
       sourceSessionId,
       sourceSessionKey,
-      nowMs: Date.now(),
     });
     const result = store.enqueueA2aOutbox({
       message_id: messageId,

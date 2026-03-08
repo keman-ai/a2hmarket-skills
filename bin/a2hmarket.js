@@ -3,6 +3,7 @@
 const { runInboxCli } = require("../runtime/js/src/cli/inbox-cli");
 const { runListenerCli } = require("../runtime/js/src/cli/listener-cli");
 const { runA2aCli } = require("../runtime/js/src/cli/a2a-cli");
+const { runSyncCli } = require("../runtime/js/src/cli/sync-cli");
 
 
 function printUsage() {
@@ -16,6 +17,7 @@ function printUsage() {
       "  a2hmarket inbox ack --event-id <id> [--consumer <id>] [--db-path <path>]",
       "  a2hmarket inbox peek [--consumer <id>] [--db-path <path>]",
       "  a2hmarket a2a send --target-agent-id <agent_id> (--text <message> | --payload-json <json>) [--message-type <type>] [--trace-id <id>] [--qos <0|1>] [--verbose]",
+      "  a2hmarket sync [--only profile|works]",
     ].join("\n") + "\n"
   );
 }
@@ -43,6 +45,12 @@ async function main() {
 
   if (root === "a2a") {
     const code = await runA2aCli(args.slice(1));
+    process.exitCode = code;
+    return;
+  }
+
+  if (root === "sync") {
+    const code = await runSyncCli(args.slice(1));
     process.exitCode = code;
     return;
   }

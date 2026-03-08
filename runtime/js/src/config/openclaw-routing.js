@@ -1,65 +1,22 @@
-const { spawnSync } = require("node:child_process");
-
 const MAIN_SESSION_KEY = "agent:main:main";
 
-function parseSessionsJson(raw) {
-  const text = String(raw || "").trim();
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start < 0 || end <= start) return null;
-    try {
-      return JSON.parse(text.slice(start, end + 1));
-    } catch {
-      return null;
-    }
+/**
+ * List sessions via GatewayClient (async).
+ * Falls back to empty list on error.
+ */
+async function listOpenclawSessions(options) {
+  const gatewayClient = options && options.gatewayClient;
+  if (!gatewayClient) {
+    return { ok: false, detail: "no gateway client", sessions: [] };
   }
-}
-
-function listOpenclawSessions(options) {
-  const openclawCommand = Array.isArray(options && options.openclawCommand)
-    ? options.openclawCommand
-    : ["openclaw"];
-  const execFn = options && typeof options.execFn === "function" ? options.execFn : spawnSync;
-  const timeoutMs = Number.isFinite(options && options.timeoutMs)
-    ? Math.max(1000, Number(options.timeoutMs))
-    : 10_000;
-  const command = [...openclawCommand, "sessions", "--json"];
-
   try {
-    const result = execFn(command[0], command.slice(1), {
-      encoding: "utf8",
-      timeout: timeoutMs,
-      maxBuffer: 512 * 1024,
-    });
-    if (result.error) {
-      return {
-        ok: false,
-        detail: String(result.error.message || result.error),
-        sessions: [],
-      };
-    }
-    if (result.status !== 0) {
-      return {
-        ok: false,
-        detail: String(`${result.stdout || ""}\n${result.stderr || ""}`.trim() || `exit=${result.status}`),
-        sessions: [],
-      };
-    }
-    const parsed = parseSessionsJson(result.stdout || "");
-    const sessions = Array.isArray(parsed && parsed.sessions) ? parsed.sessions : [];
-    return {
-      ok: true,
-      detail: "",
-      sessions,
-    };
+    const result = await gatewayClient.sessionsList();
+    const sessions = Array.isArray(result?.sessions) ? result.sessions : [];
+    return { ok: true, detail: "", sessions };
   } catch (err) {
     return {
       ok: false,
-      detail: String((err && err.message) || err),
+      detail: String(err?.message || err),
       sessions: [],
     };
   }
@@ -196,7 +153,6 @@ function parseDeliveryHintsFromSessionKey(sessionKey) {
 
 module.exports = {
   MAIN_SESSION_KEY,
-  parseSessionsJson,
   listOpenclawSessions,
   pickSessionByIdentity,
   pickLatestSession,

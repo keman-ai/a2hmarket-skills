@@ -1,6 +1,5 @@
-const { spawn } = require("node:child_process");
 const { nowMs } = require("../store/event-store");
-const { MAIN_SESSION_KEY, listOpenclawSessions, resolvePushSession } = require("../config/openclaw-routing");
+const { MAIN_SESSION_KEY, resolvePushSession } = require("../config/openclaw-routing");
 const { formatSystemEventText, coerceInt } = require("./message-utils");
 const { scrubSessionRefs } = require("../utils/session-ref");
 
@@ -11,98 +10,32 @@ function calculateBackoffMs(attempt, maxDelayMs) {
   return Math.max(1000, capped);
 }
 
-async function runOpenclawPush(cfg, text, options) {
+async function runGatewayPush(gatewayClient, text, options) {
   const resolved = (options && options.resolvedSession) || {
-    sessionId: cfg.openclawSessionId,
     sessionKey: MAIN_SESSION_KEY,
     source: "fallback",
   };
-  const timeoutSec = Math.max(30, coerceInt(cfg.openclawPushTimeoutSec, 120));
-  const command = [...cfg.openclawCommand, "agent"];
-  if (resolved.sessionId) {
-    command.push("--session-id", resolved.sessionId);
-  } else if (resolved.sessionKey) {
-    command.push("--session-key", resolved.sessionKey);
-  } else {
-    command.push("--session-id", cfg.openclawSessionId);
-  }
-  command.push(
-    "--thinking",
-    cfg.openclawPushThinking || "off",
-    "--timeout",
-    String(timeoutSec),
-    "--message",
-    text,
-    "--json"
-  );
   const started = nowMs();
-  
-  return new Promise((resolve) => {
-    let stdout = "";
-    let stderr = "";
-    let timeoutHandle = null;
-    let exited = false;
-    
-    const child = spawn(command[0], command.slice(1), {
-      encoding: "utf8",
-      maxBuffer: 1024 * 1024,
-    });
-    
-    const cleanup = () => {
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-        timeoutHandle = null;
-      }
-      if (!exited) {
-        exited = true;
-        try {
-          child.kill("SIGTERM");
-        } catch {}
-      }
-    };
-    
-    child.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-    
-    child.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-    
-    child.on("error", (err) => {
-      cleanup();
-      const elapsed = nowMs() - started;
-      resolve({
-        ok: false,
-        detail: `elapsed_ms=${elapsed} ${err.message || String(err)}`.trim(),
-      });
-    });
-    
-    child.on("exit", (code) => {
-      cleanup();
-      exited = true;
-      const elapsed = nowMs() - started;
-      const output = `${stdout}\n${stderr}`.trim();
-      const safeOutput = scrubSessionRefs(output);
-      
-      if (code === 0) {
-        resolve({ ok: true, detail: `elapsed_ms=${elapsed} ${safeOutput}`.trim() });
-      } else {
-        resolve({ ok: false, detail: `elapsed_ms=${elapsed} ${safeOutput || `exit=${code}`}`.trim() });
-      }
-    });
-    
-    timeoutHandle = setTimeout(() => {
-      if (!exited) {
-        cleanup();
-        const elapsed = nowMs() - started;
-        resolve({
-          ok: false,
-          detail: `elapsed_ms=${elapsed} timeout after ${timeoutSec}s`.trim(),
-        });
-      }
-    }, (timeoutSec + 10) * 1000);
-  });
+
+  try {
+    const sessionKey = resolved.sessionKey || MAIN_SESSION_KEY;
+    await gatewayClient.chatSend({ sessionKey, message: text });
+    const elapsed = nowMs() - started;
+    return { ok: true, detail: `elapsed_ms=${elapsed} gateway chat.send ok session=${scrubSessionRefs(sessionKey)}` };
+  } catch (err) {
+    const elapsed = nowMs() - started;
+    return { ok: false, detail: `elapsed_ms=${elapsed} ${err.message || String(err)}`.trim() };
+  }
+}
+
+async function listSessionsViaGateway(gatewayClient) {
+  try {
+    const result = await gatewayClient.sessionsList();
+    const sessions = Array.isArray(result?.sessions) ? result.sessions : [];
+    return { ok: true, detail: "", sessions };
+  } catch (err) {
+    return { ok: false, detail: String(err.message || err), sessions: [] };
+  }
 }
 
 async function flushPushOutbox(store, cfg, logger, options) {
@@ -110,11 +43,17 @@ async function flushPushOutbox(store, cfg, logger, options) {
     return { dispatched: 0, acked: 0, retried: 0, skipped: 0 };
   }
   const nowFn = options && typeof options.now === "function" ? options.now : nowMs;
-  const pushFn = options && typeof options.push === "function" ? options.push : runOpenclawPush;
+  const gatewayClient = options && options.gatewayClient;
+  const pushFn = options && typeof options.push === "function"
+    ? options.push
+    : (_, text, opts) => runGatewayPush(gatewayClient, text, opts);
+
   const tsNow = nowFn();
-  const listed = listOpenclawSessions({
-    openclawCommand: cfg.openclawCommand,
-  });
+
+  const listed = gatewayClient
+    ? await listSessionsViaGateway(gatewayClient)
+    : { ok: false, detail: "no gateway client", sessions: [] };
+
   const pushBatchSize = coerceInt(cfg.pushBatchSize, 20);
   const ackConsumer = String(cfg.pushAckConsumer || "openclaw");
   const ackWaitMs = Math.max(1000, coerceInt(cfg.pushAckWaitMs, 15000));
@@ -124,7 +63,6 @@ async function flushPushOutbox(store, cfg, logger, options) {
   let retried = 0;
   let skipped = 0;
 
-  // Reconcile outbox items that were already dispatched.
   const sentRows = store.listSentPushOutbox({
     batchSize: pushBatchSize,
   });
@@ -168,7 +106,6 @@ async function flushPushOutbox(store, cfg, logger, options) {
     );
   }
 
-  // Dispatch pending/retry rows. Mark success only after ACK is observed.
   const rows = store.listPendingPushOutbox({
     now: nowFn(),
     batchSize: pushBatchSize,
