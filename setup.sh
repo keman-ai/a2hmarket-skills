@@ -63,47 +63,20 @@ fi
 echo "[setup] 📦 Step 2/3: 安装 Node.js 依赖 ..."
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "[setup] ❌ 未找到 node，请先安装 Node.js >= 14.0.0" >&2
+  echo "[setup] ❌ 未找到 node，请先安装 Node.js" >&2
   exit 1
-fi
-
-node_version=$(node -e "process.stdout.write(process.versions.node)" 2>/dev/null || echo "0")
-major_version="${node_version%%.*}"
-if [[ "$major_version" -lt 14 ]]; then
-  echo "[setup] ❌ Node.js 版本 $node_version 低于要求的 14.0.0（运行时使用 better-sqlite3，需 Node 14+）" >&2
-  echo "[setup]    请升级 Node 后重试: https://nodejs.org/" >&2
-  exit 1
-fi
-
-# better-sqlite3 预编译二进制通常跟进到当前 LTS（Node 22）；
-# 版本过新时预编译包可能尚未发布，回退到源码编译需要 Python 3.8+/make/g++
-if [[ "$major_version" -gt 22 ]]; then
-  echo "[setup] ⚠️  Node.js 版本 $node_version 高于当前 LTS（22），better-sqlite3 预编译二进制可能尚未覆盖" >&2
-  echo "[setup]    如安装失败，请确保系统具备编译环境（Python 3.8+、make、g++），或降级至 Node 22 LTS" >&2
 fi
 
 cd "$ROOT_DIR"
 
-# _npm_install: 尝试一次 npm install，失败时返回非零
-_npm_install() {
-  npm install --omit=dev --legacy-peer-deps --no-audit --fund=false --silent "$@"
-}
-
-# 先尝试直接安装；若失败则清理 node_modules 后重试一次（避免残留缓存影响）
-if ! _npm_install; then
+# 先尝试直接安装；若失败则清理 node_modules 后重试一次
+if ! npm install --omit=dev --legacy-peer-deps --no-audit --fund=false --silent; then
   echo "[setup] ⚠️  首次安装失败，清理后重试 ..." >&2
   rm -rf node_modules
-  if ! _npm_install; then
-    echo "[setup] ❌ 依赖安装失败，请检查编译环境或 Node.js 版本" >&2
+  if ! npm install --omit=dev --legacy-peer-deps --no-audit --fund=false --silent; then
+    echo "[setup] ❌ 依赖安装失败" >&2
     exit 1
   fi
-fi
-
-# 验证 better-sqlite3 是否真正可加载（安装成功但 .node 文件缺失时会在此暴露）
-if ! node -e "require('better-sqlite3')" 2>/dev/null; then
-  echo "[setup] ❌ better-sqlite3 安装后无法加载，可能缺少预编译二进制或编译失败" >&2
-  echo "[setup]    提示：尝试 'npm rebuild better-sqlite3' 或降级至 Node 18/20/22 LTS" >&2
-  exit 1
 fi
 
 echo "[setup]    依赖安装完成"

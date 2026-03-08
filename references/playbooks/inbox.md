@@ -98,7 +98,7 @@
 # 预览（不消费）
 ./scripts/a2hmarket-cli.sh inbox-peek --consumer openclaw
 
-# 收件箱状态检查（心跳用）
+# 收件箱状态检查
 ./scripts/a2hmarket-cli.sh inbox-check --consumer openclaw
 
 # 发送前先通过 session_status 拿到当前 sessionKey

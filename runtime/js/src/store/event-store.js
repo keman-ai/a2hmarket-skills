@@ -1,6 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const Database = require("better-sqlite3");
+const { openDatabase } = require("./sqlite-adapter");
 const { applySchema } = require("./schema");
 
 function nowMs() {
@@ -46,7 +46,7 @@ class EventStore {
   open() {
     if (this.db) return this;
     fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
-    this.db = new Database(this.dbPath);
+    this.db = openDatabase(this.dbPath);
     this.db.pragma("busy_timeout = 5000");
     applySchema(this.db);
     return this;
