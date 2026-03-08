@@ -3,6 +3,31 @@ const { resolveDbPath, DEFAULT_PID_PATH } = require("../config/paths");
 const { EventStore, nowMs } = require("../store/event-store");
 const { parseDeliveryHintsFromSessionKey } = require("../config/openclaw-routing");
 
+/**
+ * 在外部摘要通知末尾追加路由回执块，使接收端（如飞书 session AI）知道
+ * 将人类决策通过 chat.send 路由回正确的 peer session。
+ *
+ * 只有当 sourceSessionKey 是 a2hmarket peer session（以 agent:main:a2hmarket: 开头）时追加，
+ * 避免 main session 自引用。
+ */
+function appendReplyRoute(summaryText, sourceSessionKey, eventId) {
+  const PEER_PREFIX = "agent:main:a2hmarket:";
+  if (!sourceSessionKey || !sourceSessionKey.startsWith(PEER_PREFIX)) {
+    return summaryText;
+  }
+  const body = String(summaryText || "").trimEnd();
+  const routeBlock = [
+    "",
+    "---",
+    "【a2hmarket 回复路由】",
+    `source_session_key: ${sourceSessionKey}`,
+    `event_id: ${eventId || "-"}`,
+    "收到人类决策后，请使用以下命令将决策转发回 peer session：",
+    `  openclaw agent --session-key "${sourceSessionKey}" --message "Human决策: <决策内容>"`,
+  ].join("\n");
+  return body + routeBlock;
+}
+
 function coerceInt(value, fallback, min, max) {
   const n = Number.parseInt(String(value), 10);
   let out = Number.isFinite(n) ? n : fallback;
@@ -187,6 +212,12 @@ async function ack({
         }
       }
       if (resolvedChannel && resolvedTo) {
+        // 自动在摘要文末追加路由回执块，使飞书 session AI 知道将人类决策路由回哪个 peer session
+        const summaryTextWithRoute = appendReplyRoute(
+          normalizedSummaryText,
+          normalizedSourceSessionKey,
+          normalizedEventId
+        );
         const enqueueResult = store.enqueueSummaryOutbox({
           eventId: normalizedEventId,
           sessionKey: normalizedSourceSessionKey || null,
@@ -194,7 +225,7 @@ async function ack({
           to: resolvedTo,
           accountId: normalizedAccountId || null,
           threadId: normalizedThreadId || null,
-          summaryText: normalizedSummaryText,
+          summaryText: summaryTextWithRoute,
           mediaUrl: normalizedMediaUrl || null,
         });
         summaryEnqueued = enqueueResult.inserted === true;

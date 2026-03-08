@@ -66,14 +66,26 @@ function formatSystemEventText(event) {
   ].join("\n");
 }
 
-function formatSummaryNotificationText({ eventId, peerId, summaryText }) {
-  return [
-    "【关键事件摘要】",
+function formatSummaryNotificationText({ eventId, peerId, summaryText, sourceSessionKey }) {
+  const lines = [
+    "【a2hmarket 关键事件摘要】",
     `event_id: ${eventId}`,
     `from_agent: ${peerId || "-"}`,
-    "",
-    String(summaryText || "").trim(),
-  ].join("\n");
+  ];
+  if (sourceSessionKey) {
+    lines.push(`source_session_key: ${sourceSessionKey}`);
+  }
+  lines.push("", String(summaryText || "").trim());
+  if (sourceSessionKey) {
+    lines.push(
+      "",
+      "---",
+      "如需在飞书中做出决策，请直接回复本消息。",
+      "飞书 session AI 收到你的回复后，请将决策转发到 peer session：",
+      `  openclaw agent --session-key ${sourceSessionKey} --message "Human决策: <你的回复>"`
+    );
+  }
+  return lines.join("\n");
 }
 
 module.exports = {
