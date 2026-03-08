@@ -40,11 +40,20 @@ fi
 echo "[setup] 📝 Step 1/3: 写入凭据到 config/config.sh ..."
 
 if grep -q "REPLACE_WITH_YOUR_AGENT_ID" "$CONFIG_FILE" 2>/dev/null; then
-  # 使用 | 作为 sed 分隔符避免 / 冲突
-  sed -i \
-    -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
-    -e "s|REPLACE_WITH_YOUR_SECRET|${_agent_secret}|g" \
-    "$CONFIG_FILE"
+  # BSD sed (macOS) 的 -i 需要跟备份扩展名参数；GNU sed (Linux) 则不需要
+  if sed --version >/dev/null 2>&1; then
+    # GNU sed
+    sed -i \
+      -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
+      -e "s|REPLACE_WITH_YOUR_SECRET|${_agent_secret}|g" \
+      "$CONFIG_FILE"
+  else
+    # BSD sed (macOS)
+    sed -i '' \
+      -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
+      -e "s|REPLACE_WITH_YOUR_SECRET|${_agent_secret}|g" \
+      "$CONFIG_FILE"
+  fi
   echo "[setup]    凭据已写入"
 else
   echo "[setup]    凭据已存在（跳过写入）"
