@@ -1,6 +1,7 @@
 const { EventStore, nowMs } = require("../store/event-store");
 const { flushPushOutbox } = require("./push-dispatcher");
 const { flushA2aOutbox } = require("./a2a-outbox-dispatcher");
+const { flushSummaryOutbox } = require("./summary-dispatcher");
 const { acquireSingleInstanceLock } = require("./lock");
 const { startA2aService } = require("../a2a/service");
 const { formatSessionRef } = require("../utils/session-ref");
@@ -35,6 +36,9 @@ async function runListener(cfg, options) {
         pushSkipped: 0,
         a2aSent: 0,
         a2aRetried: 0,
+        summarySent: 0,
+        summaryRetried: 0,
+        summaryFailed: 0,
       };
       
       try {
@@ -68,10 +72,26 @@ async function runListener(cfg, options) {
           throw err;
         }
       }
-      
-      if (stats.pushDispatched > 0 || stats.pushAcked > 0 || stats.pushRetried > 0 || stats.pushSkipped > 0 || stats.a2aSent > 0 || stats.a2aRetried > 0) {
+
+      try {
+        const summaryStats = await flushSummaryOutbox(store, cfg, logger);
+        stats.summarySent = summaryStats.sent;
+        stats.summaryRetried = summaryStats.retried;
+        stats.summaryFailed = summaryStats.failed;
+        consecutiveFailures = 0;
+      } catch (err) {
+        consecutiveFailures++;
+        logger.error(`flush summary outbox failed: ${(err && err.message) || String(err)}`);
+        if (isCriticalError(err) || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          logger.error(`critical error or too many failures (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}), stopping listener`);
+          throw err;
+        }
+      }
+
+      const anySummary = stats.summarySent > 0 || stats.summaryRetried > 0 || stats.summaryFailed > 0;
+      if (stats.pushDispatched > 0 || stats.pushAcked > 0 || stats.pushRetried > 0 || stats.pushSkipped > 0 || stats.a2aSent > 0 || stats.a2aRetried > 0 || anySummary) {
         logger.info(
-          `cycle done dispatched=${stats.pushDispatched} acked=${stats.pushAcked} retried=${stats.pushRetried} skipped=${stats.pushSkipped} a2a_sent=${stats.a2aSent} a2a_retried=${stats.a2aRetried}`
+          `cycle done dispatched=${stats.pushDispatched} acked=${stats.pushAcked} retried=${stats.pushRetried} skipped=${stats.pushSkipped} a2a_sent=${stats.a2aSent} a2a_retried=${stats.a2aRetried} summary_sent=${stats.summarySent} summary_retried=${stats.summaryRetried} summary_failed=${stats.summaryFailed}`
         );
       }
 

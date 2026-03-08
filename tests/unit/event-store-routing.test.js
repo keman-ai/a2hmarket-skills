@@ -486,6 +486,106 @@ test("getEvent returns full event with parsed payload", () => {
   }
 });
 
+test("enqueueSummaryOutbox prevents duplicate entries for same event_id", () => {
+  const temp = createTempDbPath();
+  const store = new EventStore(temp.dbPath).open();
+
+  try {
+    const first = store.enqueueSummaryOutbox({
+      eventId: "evt-summary-1",
+      sessionKey: "agent:main:feishu:direct:ou_abc",
+      channel: "feishu",
+      to: "ou_abc",
+      accountId: null,
+      threadId: null,
+      summaryText: "第一次摘要",
+    });
+
+    assert.equal(first.inserted, true);
+
+    const second = store.enqueueSummaryOutbox({
+      eventId: "evt-summary-1",
+      sessionKey: "agent:main:feishu:direct:ou_abc",
+      channel: "feishu",
+      to: "ou_abc",
+      accountId: null,
+      threadId: null,
+      summaryText: "重复入队",
+    });
+
+    assert.equal(second.inserted, false);
+    assert.equal(second.reason, "duplicate");
+  } finally {
+    store.close();
+    fs.rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("listPendingSummaryOutbox returns only pending and retry rows ready to dispatch", () => {
+  const temp = createTempDbPath();
+  const store = new EventStore(temp.dbPath).open();
+
+  try {
+    const now = Date.now();
+
+    store.enqueueSummaryOutbox({
+      eventId: "evt-pending",
+      channel: "feishu",
+      to: "ou_1",
+      summaryText: "摘要1",
+    });
+    store.enqueueSummaryOutbox({
+      eventId: "evt-future",
+      channel: "feishu",
+      to: "ou_2",
+      summaryText: "摘要2",
+    });
+    // Mark evt-future as retry with future deadline
+    const rows = store.listPendingSummaryOutbox({ now: now + 1, batchSize: 10 });
+    const futureRow = rows.find((r) => r.event_id === "evt-future");
+    if (futureRow) {
+      store.markSummaryRetry({
+        outboxId: futureRow.id,
+        attempt: 1,
+        nextRetryAt: now + 999999,
+        lastError: "temp error",
+      });
+    }
+
+    const pending = store.listPendingSummaryOutbox({ now: now + 1, batchSize: 10 });
+    const ids = pending.map((r) => r.event_id);
+    assert.ok(ids.includes("evt-pending"));
+    assert.ok(!ids.includes("evt-future"));
+  } finally {
+    store.close();
+    fs.rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("markSummarySent transitions status to SENT", () => {
+  const temp = createTempDbPath();
+  const store = new EventStore(temp.dbPath).open();
+
+  try {
+    store.enqueueSummaryOutbox({
+      eventId: "evt-to-send",
+      channel: "feishu",
+      to: "ou_send",
+      summaryText: "摘要",
+    });
+
+    const [row] = store.listPendingSummaryOutbox({ now: Date.now() + 1, batchSize: 5 });
+    assert.ok(row);
+    store.markSummarySent({ outboxId: row.id });
+
+    const remaining = store.listPendingSummaryOutbox({ now: Date.now() + 1, batchSize: 5 });
+    assert.equal(remaining.length, 0);
+  } finally {
+    store.close();
+    fs.rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
 test("inbox get via service returns event or not_found", async () => {
   const { get } = require("../../runtime/js/src/inbox/inbox-service");
   const temp = createTempDbPath();

@@ -19,34 +19,46 @@
    
    - 其他 A2A 消息 → 根据业务逻辑处理
 
-3. 处理完毕 → inbox.ack（必须确认，避免重复消费）
+3. 处理完毕 → inbox ack（必须确认，避免重复消费）
+   如为关键事件，同时传 --notify-external --summary-text 触发外部摘要通知
 ```
 
 > 关键规则：
 > 1. 发送任何 A2A 前，先调用 `session_status` 获取当前 `sessionKey`，然后在 `a2a send` 中显式传 `--source-session-key`。
 > 2. 在当前会话执行 `inbox pull` 时，也必须显式传同一个 `--source-session-key`，让本次拉到的 peer 立即切换到当前会话。
-> 3. 在当前会话处理完一条 A2A 消息并执行 `inbox ack` 时，也要显式传同一个 `--source-session-key`，让该 peer 的后续无 trace 消息优先回到当前会话。  
+> 3. 在当前会话处理完一条 A2A 消息并执行 `inbox ack` 时，也要显式传同一个 `--source-session-key`，让该 peer 的后续无 trace 消息优先回到当前会话。
 
 ---
 
-## 关键事件回传规则
+## 关键事件回传规则（双阶段投递）
 
-- 在收到【待处理 A2A 消息】的时候，你判断为“需要人关注”的关键事件时，必须要求openclaw顺着当前 channel （飞书、钉钉等） 通知到用户，可以通过标记为announce
-- 关键事件包括：
-  - 协商达成 / 协商破裂
-  - 订单创建成功 / 订单被拒绝
-  - 支付待确认 / 已确认收款
-  - 履约完成 / 履约异常
-  - 工具失败、重试超限、状态不一致
-- 通知格式建议（可直接复用）：
-  - `【关键事件】<事件名>`
-  - `订单ID/对方ID：...`
-  - `当前状态：...`
-  - `下一步动作：...`
-  - `是否需要你确认：是/否`
-- 如果需要跨会话主动通知（非当前会话）：
-  - 必须使用 `sessions_send`，并显式指定目标 `sessionKey`
-  - 严禁依赖“默认主会话”猜测目标
+### 第一阶段：Session 注入（自动）
+监听器将完整 A2A 消息内容推送进 OpenClaw 目标 session，你收到的【待处理A2A消息】已包含完整正文，无需额外操作。
+
+### 第二阶段：外部摘要通知（显式触发，由你决定是否发送）
+当你判断某条消息为关键事件时，在 `inbox ack` 时加上 `--notify-external` 和 `--summary-text` 参数：
+
+- 监听器会用 `openclaw message send` 把摘要发到对应外部 channel（飞书/钉钉等）
+- 路由来自 `--source-session-key`（如 `agent:main:feishu:direct:ou_xxx` 自动解析为 feishu channel）
+- 首次 ack 触发，重复 ack 不重复发送（幂等保护）
+- 不传 `--notify-external` 或 `--summary-text` 为空时，不发送任何外部通知
+
+**关键事件参考清单**：
+- 协商达成 / 协商破裂
+- 订单创建成功 / 订单被拒绝
+- 支付待确认 / 已确认收款
+- 履约完成 / 履约异常
+- 工具失败、重试超限、状态不一致
+
+**摘要格式建议**（由你生成，简洁为主，5 行内）：
+```
+【关键事件】<事件名>
+对方：ag_xxx
+状态：协商达成，价格 ¥300
+下一步：请确认是否创建订单
+```
+
+> 如需跨会话通知（非当前 channel）：使用 `sessions_send`，显式指定目标 `sessionKey`；严禁依赖"默认主会话"猜测目标。
 
 ---
 
@@ -60,8 +72,14 @@
 # 查看单条完整消息（含完整 payload）
 ./scripts/a2hmarket-cli.sh inbox-get --event-id a2hmarket_xxx
 
-# 确认已处理，并把该 peer 后续消息绑定到当前会话
+# 普通确认（不触发外部通知）
 ./scripts/a2hmarket-cli.sh inbox-ack --consumer openclaw --event-id a2hmarket_xxx --source-session-key agent:main:feishu:direct:ou_xxx
+
+# 关键事件确认（触发外部摘要通知）
+./scripts/a2hmarket-cli.sh inbox-ack --consumer openclaw --event-id a2hmarket_xxx \
+  --source-session-key agent:main:feishu:direct:ou_xxx \
+  --notify-external \
+  --summary-text "【关键事件】订单已创建 WKS123，价格 ¥300，请人工确认"
 
 # 预览（不消费）
 ./scripts/a2hmarket-cli.sh inbox-peek --consumer openclaw
@@ -71,7 +89,7 @@
 
 # 发送 A2A（必须显式携带 source session）
 ./scripts/a2hmarket-cli.sh a2a-send --target-agent-id ag_target --text "hello" --source-session-key agent:main:feishu:direct:ou_xxx
-
+```
 
 ---
 

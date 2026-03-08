@@ -689,6 +689,83 @@ class EventStore {
       payload,
     };
   }
+
+  // --- summary_outbox methods ---
+
+  enqueueSummaryOutbox({ eventId, sessionKey, channel, to, accountId, threadId, summaryText }) {
+    const ts = nowMs();
+    try {
+      this.db.prepare(`
+        INSERT INTO summary_outbox
+          (event_id, session_key, channel, to_target, account_id, thread_id, summary_text,
+           status, attempt, next_retry_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?)
+      `).run(
+        String(eventId),
+        nullableText(sessionKey),
+        String(channel),
+        String(to),
+        nullableText(accountId),
+        nullableText(threadId),
+        String(summaryText),
+        ts,
+        ts,
+        ts
+      );
+      return { inserted: true };
+    } catch (err) {
+      if (isUniqueConstraint(err)) {
+        return { inserted: false, reason: "duplicate" };
+      }
+      throw err;
+    }
+  }
+
+  listPendingSummaryOutbox({ now, batchSize }) {
+    const tsNow = coerceInt(now, nowMs());
+    return this.db.prepare(`
+      SELECT id, event_id, session_key, channel, to_target AS to_target,
+             account_id, thread_id, summary_text, status, attempt, next_retry_at, updated_at
+      FROM summary_outbox
+      WHERE status IN ('PENDING', 'RETRY')
+        AND next_retry_at <= ?
+      ORDER BY id ASC
+      LIMIT ?
+    `).all(tsNow, coerceInt(batchSize, 20));
+  }
+
+  markSummarySent({ outboxId }) {
+    const ts = nowMs();
+    this.db.prepare(`
+      UPDATE summary_outbox
+      SET status='SENT', updated_at=?, last_error=NULL
+      WHERE id=?
+    `).run(ts, coerceInt(outboxId, 0));
+  }
+
+  markSummaryRetry({ outboxId, attempt, nextRetryAt, lastError }) {
+    const ts = nowMs();
+    this.db.prepare(`
+      UPDATE summary_outbox
+      SET status='RETRY', attempt=?, next_retry_at=?, updated_at=?, last_error=?
+      WHERE id=?
+    `).run(
+      coerceInt(attempt, 0),
+      coerceInt(nextRetryAt, ts),
+      ts,
+      String(lastError || "").slice(0, 1000),
+      coerceInt(outboxId, 0)
+    );
+  }
+
+  markSummaryFailed({ outboxId, lastError }) {
+    const ts = nowMs();
+    this.db.prepare(`
+      UPDATE summary_outbox
+      SET status='FAILED', updated_at=?, last_error=?
+      WHERE id=?
+    `).run(ts, String(lastError || "").slice(0, 1000), coerceInt(outboxId, 0));
+  }
 }
 
 module.exports = {

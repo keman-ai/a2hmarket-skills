@@ -376,6 +376,199 @@ test("inbox pull does not let old event override newer peer binding", async () =
   }
 });
 
+test("inbox ack with notify-external enqueues summary on first ack only", async () => {
+  const temp = createTempDbPath();
+  const store = new EventStore(temp.dbPath).open();
+
+  try {
+    store.insertIncomingEvent({
+      event_id: "event-notify-1",
+      peer_id: "peer-notify",
+      message_id: "incoming-notify-1",
+      msg_ts: Date.now(),
+      hash: "hash-notify-1",
+      unread_count: 1,
+      preview: "important event",
+      payload: { text: "important event body" },
+      state: "NEW",
+      source: "MQTT",
+      a2a_message_id: "incoming-notify-1",
+      push_enabled: false,
+    });
+  } finally {
+    store.close();
+  }
+
+  try {
+    // First ACK with notify-external and summary-text should enqueue
+    const first = await ack({
+      dbPath: temp.dbPath,
+      consumerId: "openclaw",
+      eventId: "event-notify-1",
+      sourceSessionKey: "agent:main:feishu:direct:ou_abc123",
+      notifyExternal: true,
+      summaryText: "订单已确认，请人工审核",
+    });
+
+    assert.equal(first.ok, true);
+    assert.equal(first.summary_enqueued, true);
+    assert.equal(first.summary_skip_reason, undefined);
+
+    // Second ACK should NOT enqueue again (idempotent)
+    const second = await ack({
+      dbPath: temp.dbPath,
+      consumerId: "openclaw",
+      eventId: "event-notify-1",
+      sourceSessionKey: "agent:main:feishu:direct:ou_abc123",
+      notifyExternal: true,
+      summaryText: "重复入队",
+    });
+
+    assert.equal(second.ok, true);
+    assert.equal(second.summary_enqueued, false);
+    assert.equal(second.summary_skip_reason, "already_acked");
+  } finally {
+    fs.rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("inbox ack without notify-external does not enqueue summary", async () => {
+  const temp = createTempDbPath();
+  const store = new EventStore(temp.dbPath).open();
+
+  try {
+    store.insertIncomingEvent({
+      event_id: "event-no-notify",
+      peer_id: "peer-no-notify",
+      message_id: "incoming-no-notify",
+      msg_ts: Date.now(),
+      hash: "hash-no-notify",
+      unread_count: 1,
+      preview: "regular event",
+      payload: { text: "regular event body" },
+      state: "NEW",
+      source: "MQTT",
+      a2a_message_id: "incoming-no-notify",
+      push_enabled: false,
+    });
+  } finally {
+    store.close();
+  }
+
+  try {
+    const result = await ack({
+      dbPath: temp.dbPath,
+      consumerId: "openclaw",
+      eventId: "event-no-notify",
+      sourceSessionKey: "agent:main:feishu:direct:ou_abc",
+      notifyExternal: false,
+      summaryText: "这条消息不应该被入队",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.summary_enqueued, false);
+  } finally {
+    fs.rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("inbox ack with notify-external but no summary-text does not enqueue", async () => {
+  const temp = createTempDbPath();
+  const store = new EventStore(temp.dbPath).open();
+
+  try {
+    store.insertIncomingEvent({
+      event_id: "event-empty-summary",
+      peer_id: "peer-empty",
+      message_id: "incoming-empty",
+      msg_ts: Date.now(),
+      hash: "hash-empty",
+      unread_count: 1,
+      preview: "event",
+      payload: { text: "body" },
+      state: "NEW",
+      source: "MQTT",
+      a2a_message_id: "incoming-empty",
+      push_enabled: false,
+    });
+  } finally {
+    store.close();
+  }
+
+  try {
+    const result = await ack({
+      dbPath: temp.dbPath,
+      consumerId: "openclaw",
+      eventId: "event-empty-summary",
+      sourceSessionKey: "agent:main:feishu:direct:ou_abc",
+      notifyExternal: true,
+      summaryText: "",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.summary_enqueued, false);
+    assert.equal(result.summary_skip_reason, "no_summary_text");
+  } finally {
+    fs.rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("inbox ack with notify-external uses explicit channel/to over session key parsing", async () => {
+  const temp = createTempDbPath();
+  const store = new EventStore(temp.dbPath).open();
+
+  try {
+    store.insertIncomingEvent({
+      event_id: "event-explicit-route",
+      peer_id: "peer-route",
+      message_id: "incoming-route",
+      msg_ts: Date.now(),
+      hash: "hash-route",
+      unread_count: 1,
+      preview: "event",
+      payload: { text: "body" },
+      state: "NEW",
+      source: "MQTT",
+      a2a_message_id: "incoming-route",
+      push_enabled: false,
+    });
+  } finally {
+    store.close();
+  }
+
+  try {
+    const result = await ack({
+      dbPath: temp.dbPath,
+      consumerId: "openclaw",
+      eventId: "event-explicit-route",
+      sourceSessionKey: "agent:main:feishu:direct:ou_abc",
+      notifyExternal: true,
+      summaryText: "摘要",
+      channel: "feishu",
+      to: "ou_override_user",
+      accountId: "acc123",
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.summary_enqueued, true);
+
+    // Verify the queued record used explicit channel/to
+    const verifyStore = new EventStore(temp.dbPath).open();
+    try {
+      const rows = verifyStore.listPendingSummaryOutbox({ now: Date.now() + 1, batchSize: 5 });
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].channel, "feishu");
+      assert.equal(rows[0].to_target, "ou_override_user");
+      assert.equal(rows[0].account_id, "acc123");
+      assert.equal(rows[0].summary_text, "摘要");
+    } finally {
+      verifyStore.close();
+    }
+  } finally {
+    fs.rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
 test("inbox ack does not let old event override newer peer binding", async () => {
   const temp = createTempDbPath();
   const store = new EventStore(temp.dbPath).open();

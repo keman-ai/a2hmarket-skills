@@ -1,5 +1,6 @@
 const { resolveDbPath } = require("../config/paths");
 const { EventStore, nowMs } = require("../store/event-store");
+const { parseDeliveryHintsFromSessionKey } = require("../config/openclaw-routing");
 
 function coerceInt(value, fallback, min, max) {
   const n = Number.parseInt(String(value), 10);
@@ -104,13 +105,32 @@ async function pull({
   }
 }
 
-async function ack({ dbPath, consumerId, eventId, sourceSessionId, sourceSessionKey }) {
+async function ack({
+  dbPath,
+  consumerId,
+  eventId,
+  sourceSessionId,
+  sourceSessionKey,
+  notifyExternal,
+  summaryText,
+  channel,
+  to,
+  accountId,
+  threadId,
+}) {
   const store = new EventStore(resolveDbPath(dbPath)).open();
   try {
     const normalizedConsumer = String(consumerId || "default");
     const normalizedEventId = String(eventId || "").trim();
     const normalizedSourceSessionId = String(sourceSessionId || "").trim();
     const normalizedSourceSessionKey = String(sourceSessionKey || "").trim();
+    const normalizedSummaryText = String(summaryText || "").trim();
+    const normalizedChannel = String(channel || "").trim();
+    const normalizedTo = String(to || "").trim();
+    const normalizedAccountId = String(accountId || "").trim();
+    const normalizedThreadId = String(threadId || "").trim();
+    const doNotify = Boolean(notifyExternal) && normalizedSummaryText.length > 0;
+
     if (!normalizedEventId) {
       throw new Error("event_id is required");
     }
@@ -147,6 +167,44 @@ async function ack({ dbPath, consumerId, eventId, sourceSessionId, sourceSession
         routeBindReason = ackResult.routeBindReason || "";
       }
     }
+
+    // Enqueue external summary notification on first ACK only.
+    let summaryEnqueued = false;
+    let summarySkipReason = "";
+    if (doNotify && ackResult.inserted === true) {
+      // Resolve delivery target: explicit params > parse from source_session_key.
+      let resolvedChannel = normalizedChannel;
+      let resolvedTo = normalizedTo;
+      if (!resolvedChannel || !resolvedTo) {
+        const hints = parseDeliveryHintsFromSessionKey(normalizedSourceSessionKey);
+        if (hints) {
+          resolvedChannel = resolvedChannel || hints.channel;
+          resolvedTo = resolvedTo || hints.to;
+        }
+      }
+      if (resolvedChannel && resolvedTo) {
+        const enqueueResult = store.enqueueSummaryOutbox({
+          eventId: normalizedEventId,
+          sessionKey: normalizedSourceSessionKey || null,
+          channel: resolvedChannel,
+          to: resolvedTo,
+          accountId: normalizedAccountId || null,
+          threadId: normalizedThreadId || null,
+          summaryText: normalizedSummaryText,
+        });
+        summaryEnqueued = enqueueResult.inserted === true;
+        if (!summaryEnqueued) {
+          summarySkipReason = enqueueResult.reason || "unknown";
+        }
+      } else {
+        summarySkipReason = "no_delivery_target";
+      }
+    } else if (doNotify && ackResult.inserted !== true) {
+      summarySkipReason = "already_acked";
+    } else if (Boolean(notifyExternal) && !normalizedSummaryText) {
+      summarySkipReason = "no_summary_text";
+    }
+
     return {
       ok: true,
       consumer_id: normalizedConsumer,
@@ -154,6 +212,8 @@ async function ack({ dbPath, consumerId, eventId, sourceSessionId, sourceSession
       acked_at: ackedAt,
       route_bound: ackResult.routeBound === true,
       route_bind_reason: routeBindReason,
+      summary_enqueued: summaryEnqueued,
+      summary_skip_reason: summarySkipReason || undefined,
     };
   } finally {
     store.close();

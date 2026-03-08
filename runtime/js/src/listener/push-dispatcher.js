@@ -1,6 +1,6 @@
 const { spawn } = require("node:child_process");
 const { nowMs } = require("../store/event-store");
-const { MAIN_SESSION_KEY, listOpenclawSessions, resolvePushSession, parseDeliveryHintsFromSessionKey } = require("../config/openclaw-routing");
+const { MAIN_SESSION_KEY, listOpenclawSessions, resolvePushSession } = require("../config/openclaw-routing");
 const { formatSystemEventText, coerceInt } = require("./message-utils");
 const { scrubSessionRefs } = require("../utils/session-ref");
 
@@ -25,10 +25,6 @@ async function runOpenclawPush(cfg, text, options) {
     command.push("--session-key", resolved.sessionKey);
   } else {
     command.push("--session-id", cfg.openclawSessionId);
-  }
-  const deliveryHints = parseDeliveryHintsFromSessionKey(resolved.sessionKey);
-  if (deliveryHints) {
-    command.push("--deliver", "--reply-channel", deliveryHints.channel, "--reply-to", deliveryHints.to);
   }
   command.push(
     "--thinking",
@@ -205,10 +201,8 @@ async function flushPushOutbox(store, cfg, logger, options) {
         ackDeadlineAt: nowFn() + ackWaitMs,
       });
       dispatched += 1;
-      const hints = parseDeliveryHintsFromSessionKey(resolvedSession.sessionKey);
-      const deliverLog = hints ? ` deliver=${hints.channel}:${hints.to}` : "";
       logger.info(
-        `push dispatched event_id=${row.event_id} consumer=${ackConsumer} ack_wait_ms=${ackWaitMs} target_session=${resolvedSession.sessionKey || resolvedSession.sessionId || "-"} route_source=${resolvedSession.source || "fallback"}${deliverLog}`
+        `push dispatched event_id=${row.event_id} consumer=${ackConsumer} ack_wait_ms=${ackWaitMs} target_session=${resolvedSession.sessionKey || resolvedSession.sessionId || "-"} route_source=${resolvedSession.source || "fallback"}`
       );
       continue;
     }

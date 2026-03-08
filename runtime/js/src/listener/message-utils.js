@@ -66,10 +66,21 @@ function formatSystemEventText(event) {
   ].join("\n");
 }
 
+function formatSummaryNotificationText({ eventId, peerId, summaryText }) {
+  return [
+    "【关键事件摘要】",
+    `event_id: ${eventId}`,
+    `from_agent: ${peerId || "-"}`,
+    "",
+    String(summaryText || "").trim(),
+  ].join("\n");
+}
+
 module.exports = {
   coerceInt,
   normalizeText,
   sanitizePreview,
   toEventHash,
   formatSystemEventText,
+  formatSummaryNotificationText,
 };

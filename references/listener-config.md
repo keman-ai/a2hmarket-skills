@@ -120,11 +120,21 @@ Runtime 专用配置（OpenClaw 推送、MQTT、消息排重等）的默认值�
 
 这意味着：一次从飞书 session 发起的 A2A 对话，后续回包会优先回到该飞书 session，而不是漂到 `main:main`。
 
-### 外部 Channel 主动投递（Outbound Delivery）
+### 双阶段消息投递
 
-当推送目标 session 的 key 能解析出外部 channel 信息时（如 `agent:main:feishu:direct:ou_xxx`），监听器会自动在 `openclaw agent` 命令中附加 `--deliver --reply-channel <channel> --reply-to <to>`，使 OpenClaw 在生成回复后主动将消息投递到该外部 channel（飞书、WhatsApp、Telegram 等）。
+监听器采用双阶段机制处理关键事件：
 
-如果目标 session 无法解析出 channel 信息（如默认 `agent:main:main`），则不会附加 `--deliver`，行为与之前一致（仅在 webchat 可见）。
+**第一阶段（Session 注入，自动）**
+- 使用 `openclaw agent --session-key <key> --message <full_text>` 将完整消息写入目标 OpenClaw session
+- 不附加 `--deliver`，不触发 OpenClaw 主动向外部 channel 回写
+- 消息包含完整正文（含 markdown 图片链接等），确保 AI 能完整分析
+
+**第二阶段（外部摘要通知，显式触发）**
+- 由 OpenClaw/技能层在 `inbox ack` 时显式触发：传入 `--notify-external --summary-text <text>`
+- 监听器使用 `openclaw message send --channel <ch> --target <to> --message <summary>` 发送摘要到外部 channel
+- 路由优先使用 `inbox ack` 时传入的显式 `--channel/--to`，其次解析 `--source-session-key` 得到 channel/to
+- 幂等保护：同一事件只在首次 ack 时入队，重复 ack 不会重复发送
+- 不传 `--notify-external` 或 `--summary-text` 为空时，跳过第二阶段
 
 > 发布说明：精确回路由对**本次改动上线后新发出的 A2A 消息**生效。上线前已经在途的旧消息没有来源 session 记录，收到回包时只能走回退策略。
 
@@ -135,6 +145,8 @@ Runtime 专用配置（OpenClaw 推送、MQTT、消息排重等）的默认值�
 2. `consumer_ack` 出现（默认 consumer=`openclaw`）→ outbox 状态变为 `ACKED`，事件视为真正消费成功
 
 若超过 `A2HMARKET_PUSH_ACK_WAIT_MS` 仍未 ACK，会自动进入重试（指数退避）。
+
+摘要通知（summary_outbox）独立于 push_outbox，最多重试 `summaryMaxRetries`（默认 5）次，超限则标记为 FAILED。
 
 ## 运行方式
 

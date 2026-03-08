@@ -87,12 +87,39 @@ CREATE TABLE IF NOT EXISTS consumer_ack (
 
 CREATE INDEX IF NOT EXISTS idx_consumer_ack_event_id
   ON consumer_ack(event_id);
+
+CREATE TABLE IF NOT EXISTS summary_outbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id TEXT NOT NULL UNIQUE,
+  session_key TEXT,
+  channel TEXT NOT NULL,
+  to_target TEXT NOT NULL,
+  account_id TEXT,
+  thread_id TEXT,
+  summary_text TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  attempt INTEGER NOT NULL DEFAULT 0,
+  next_retry_at INTEGER NOT NULL,
+  last_error TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_summary_outbox_status_retry
+  ON summary_outbox(status, next_retry_at);
 `;
 
 function columnExists(db, tableName, columnName) {
   const stmt = db.prepare(`PRAGMA table_info(${tableName});`);
   const rows = stmt.all();
   return rows.some((row) => String(row.name) === columnName);
+}
+
+function tableExists(db, tableName) {
+  const row = db.prepare(
+    `SELECT name FROM sqlite_master WHERE type='table' AND name=?;`
+  ).get(tableName);
+  return row != null;
 }
 
 function applySchema(db) {
@@ -136,6 +163,32 @@ function applySchema(db) {
     CREATE INDEX IF NOT EXISTS idx_a2a_outbox_target_updated
       ON a2a_outbox(target_agent_id, updated_at);
   `);
+
+  // summary_outbox migration for existing databases
+  if (!tableExists(db, "summary_outbox")) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS summary_outbox (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id TEXT NOT NULL UNIQUE,
+        session_key TEXT,
+        channel TEXT NOT NULL,
+        to_target TEXT NOT NULL,
+        account_id TEXT,
+        thread_id TEXT,
+        summary_text TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        attempt INTEGER NOT NULL DEFAULT 0,
+        next_retry_at INTEGER NOT NULL,
+        last_error TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `);
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_summary_outbox_status_retry
+        ON summary_outbox(status, next_retry_at);
+    `);
+  }
 }
 
 module.exports = {

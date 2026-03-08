@@ -6,7 +6,8 @@ function printUsage() {
     [
       "Usage:",
       "  a2hmarket inbox pull [--consumer <id>] [--cursor <n>] [--max <n>] [--wait-ms <n>] [--poll-interval-ms <n>] [--source-session-id <id>] [--source-session-key <key>] [--db-path <path>]",
-      "  a2hmarket inbox ack --event-id <id> [--consumer <id>] [--source-session-id <id>] [--source-session-key <key>] [--db-path <path>]",
+      "  a2hmarket inbox ack --event-id <id> [--consumer <id>] [--source-session-id <id>] [--source-session-key <key>]",
+      "                      [--notify-external] [--summary-text <text>] [--channel <ch>] [--to <target>] [--account-id <id>] [--thread-id <id>] [--db-path <path>]",
       "  a2hmarket inbox peek [--consumer <id>] [--db-path <path>]",
       "  a2hmarket inbox get --event-id <id> [--db-path <path>]",
     ].join("\n") + "\n"
@@ -44,6 +45,12 @@ async function runInboxCli(args) {
         eventId: options["event-id"],
         sourceSessionId: options["source-session-id"],
         sourceSessionKey: options["source-session-key"],
+        notifyExternal: Boolean(options["notify-external"]),
+        summaryText: options["summary-text"],
+        channel: options.channel,
+        to: options.to,
+        accountId: options["account-id"],
+        threadId: options["thread-id"],
       });
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       return 0;
