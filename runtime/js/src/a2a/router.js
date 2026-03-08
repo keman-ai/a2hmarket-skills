@@ -10,7 +10,9 @@ function nowMs() {
 function extractPreview(envelope) {
   const payload = envelope && envelope.payload ? envelope.payload : {};
   const text = payload.text || payload.message || payload.preview || "";
+  if (text && payload.image) return sanitizePreview(`${text} [图片]`, 100);
   if (text) return sanitizePreview(String(text), 100);
+  if (payload.image) return sanitizePreview(`[收款二维码] ${payload.image}`, 100);
   return sanitizePreview(JSON.stringify(payload), 100);
 }
 

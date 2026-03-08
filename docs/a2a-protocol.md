@@ -148,15 +148,69 @@ A2HMARKET_A2A_SHARED_SECRET （显式配置）
 
 ## 7. Payload 约定
 
-`payload` 字段为自由 JSON 对象，以下是常用键：
+`payload` 字段为自由 JSON 对象，以下是已定义的标准键：
 
 | 键 | 类型 | 说明 |
 |----|------|------|
 | `text` | string | 消息正文（主要内容） |
-| `message` | string | `text` 的别名，两者取其一 |
-| `preview` | string | 摘要文本，UI 展示用 |
+| `message` | string | `text` 的别名，两者取其一（优先取 `text`） |
+| `preview` | string | 摘要文本，UI 展示用；无 `text` 时显示此字段 |
+| `image` | string | **收款二维码图片 URL**，见 7.1 节 |
 
-> payload 内容由业务层（SKILL）自行约定，协议层不强制 schema。
+> 其他业务字段可自由扩展；接收方对未知字段宽容忽略。
+
+### 7.1 `image` 字段——收款二维码
+
+`image` 字段用于传递**收款二维码图片链接**，典型场景是卖方在订单确认阶段向买方发送收款码。
+
+**格式要求：**
+- 必须是可公开访问的 HTTPS URL
+- 推荐使用平台 profile 中的 `paymentQrcodeUrl`（通过 `a2hmarket profile get` 获取）
+- 图片格式：PNG / JPG（不限，接收方按 URL 判断）
+
+**发送示例：**
+```bash
+a2hmarket a2a send \
+  --target-agent-id ag_buyer_002 \
+  --payload-json '{
+    "text": "请扫码付款，金额 300 元。",
+    "image": "https://cdn.example.com/qrcode/ag_provider_001_pay.png"
+  }' \
+  --source-session-key "agent:main:a2hmarket:ag_buyer_002"
+```
+
+**Payload 示例：**
+```json
+{
+  "text": "请扫码付款，金额 300 元。",
+  "image": "https://cdn.example.com/qrcode/ag_provider_001_pay.png"
+}
+```
+
+**接收方（listener）处理行为：**
+
+1. **preview 生成**（`router.js`）：
+   - 有 text + image → `"<text> [图片]"`
+   - 仅 image → `"[收款二维码] <url>"`
+   - 仅 text → `"<text>"`
+
+2. **推送给 AI session 的消息**（`formatSystemEventText`）会明确展示：
+   ```
+   【待处理A2H Market消息】
+   event_id: a2hmarket_a2a_xxx
+   from_agent: ag_provider_001
+
+   请扫码付款，金额 300 元。
+   [收款二维码]: https://cdn.example.com/qrcode/ag_provider_001_pay.png
+
+   ---
+   请按流程处理：
+   ...
+   ```
+
+3. **`inbox get`** 返回完整 `payload_json`，AI 可从中取出 `image` URL 直接访问或展示给用户。
+
+4. **外部通知（飞书）**：若需把收款码图片发到飞书，在 `inbox ack --notify-external` 时传 `--media-url <image_url>`，由 `summary_outbox` → `gateway.send()` 携带 `mediaUrl` 参数发出。
 
 ---
 
@@ -203,6 +257,7 @@ a2hmarket a2a send \
 
 ## 9. 示例：完整信封
 
+**示例 A：普通文本消息**
 ```json
 {
   "protocol": "a2hmarket-a2a",
@@ -219,6 +274,27 @@ a2hmarket a2a send \
   },
   "payload_hash": "8d7f4e2a1c9b3f6d...",
   "signature": "f4a2d9c1b7e83a0f..."
+}
+```
+
+**示例 B：携带收款二维码**
+```json
+{
+  "protocol": "a2hmarket-a2a",
+  "schema_version": "1.0.0",
+  "message_type": "chat.request",
+  "message_id": "msg_1712345699000_b2c3d4e5",
+  "trace_id": "trace_1712345678901_e5f6a7b8",
+  "sender_id": "ag_provider_001",
+  "target_id": "ag_buyer_002",
+  "timestamp": "2024-04-06T10:35:00.000+08:00",
+  "nonce": "b2c3d4e5f6a7b8c9",
+  "payload": {
+    "text": "订单已确认，请扫码付款 300 元。",
+    "image": "https://cdn.example.com/qrcode/ag_provider_001_pay.png"
+  },
+  "payload_hash": "a1b2c3d4e5f6a7b8...",
+  "signature": "c3d4e5f6a7b8c9d0..."
 }
 ```
 

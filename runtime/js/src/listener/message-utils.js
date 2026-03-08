@@ -44,26 +44,54 @@ function extractFullText(event) {
     return "";
   }
   const payload = envelope && envelope.payload ? envelope.payload : envelope;
-  return String(payload && (payload.text || payload.message) || "").trim();
+  const text = String(payload && (payload.text || payload.message) || "").trim();
+  const image = String(payload && payload.image || "").trim();
+  if (text && image) return `${text}\n[收款二维码]: ${image}`;
+  if (image) return `[收款二维码]: ${image}`;
+  return text;
+}
+
+function extractImageUrl(event) {
+  const raw = event.payload_json;
+  if (!raw) return "";
+  let envelope;
+  try {
+    envelope = typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch {
+    return "";
+  }
+  const payload = envelope && envelope.payload ? envelope.payload : envelope;
+  return String(payload && payload.image || "").trim();
 }
 
 function formatSystemEventText(event) {
   const fullText = extractFullText(event);
   const body = fullText || sanitizePreview(event.preview, 200);
-  return [
+  const imageUrl = extractImageUrl(event);
+
+  const lines = [
     "【待处理A2H Market消息】",
     `event_id: ${event.event_id}`,
     `from_agent: ${event.peer_id}`,
     "",
     body,
+  ];
+
+  if (imageUrl && !fullText.includes(imageUrl)) {
+    lines.push(`[收款二维码]: ${imageUrl}`);
+  }
+
+  lines.push(
     "",
     "---",
     "请按流程处理：",
     `1) 如需查看完整消息，使用 inbox get --event-id ${event.event_id}`,
     "2) 根据消息内容决定响应策略；",
     "3) 使用 a2a send 发送响应消息到对方 Agent；",
-    `4) 处理完成后调用 inbox ack --event-id ${event.event_id} 标记已处理。`,
-  ].join("\n");
+    `4) 处理完成后调用 inbox ack --event-id ${event.event_id} 标记已处理。`
+  );
+
+  return lines.join("\n");
 }
 
 function formatSummaryNotificationText({ eventId, peerId, summaryText, sourceSessionKey }) {
@@ -93,6 +121,8 @@ module.exports = {
   normalizeText,
   sanitizePreview,
   toEventHash,
+  extractFullText,
+  extractImageUrl,
   formatSystemEventText,
   formatSummaryNotificationText,
 };
