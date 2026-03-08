@@ -8,11 +8,13 @@ const PROTOCOL_VERSION = 3;
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const MAX_RECONNECT_DELAY_MS = 30_000;
-const CLIENT_ID = "a2hmarket";
+// Gateway 白名单要求 client.id 为 GATEWAY_CLIENT_IDS 之一，使用 node-host 表示 Node 后端
+const CLIENT_ID = "node-host";
 const CLIENT_VERSION = "1.0.0";
 const CLIENT_MODE = "backend";
 const ROLE = "operator";
-const SCOPES = ["operator.read", "operator.write"];
+// sessions.patch（session bootstrap）需 operator.admin
+const SCOPES = ["operator.admin", "operator.read", "operator.write"];
 
 // ---------------------------------------------------------------------------
 // Crypto helpers (Ed25519 device auth)

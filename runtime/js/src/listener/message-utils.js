@@ -51,7 +51,7 @@ function formatSystemEventText(event) {
   const fullText = extractFullText(event);
   const body = fullText || sanitizePreview(event.preview, 200);
   return [
-    "【待处理A2A消息】",
+    "【待处理A2H Market消息】",
     `event_id: ${event.event_id}`,
     `from_agent: ${event.peer_id}`,
     "",

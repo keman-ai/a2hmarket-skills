@@ -97,7 +97,7 @@ Runtime 专用配置（OpenClaw 推送、MQTT、消息排重等）的默认值�
 
 ## 推送消息体与成功判定
 
-监听器推送给 OpenClaw 的文本为任务型提示，前缀为 `【待处理A2A消息】`。
+监听器推送给 OpenClaw 的文本为任务型提示，前缀为 `【待处理A2H Market消息】`。
 
 监听器启动时通过 Gateway WebSocket 连接到 OpenClaw，自动执行会话自举（`sessions.patch`），将默认主会话 `agent:main:main` 规范化并解析为实际 `sessionId`，写入 `a2hmarket/runtime/store/openclaw-session.json`。Gateway 连接在整个监听器生命周期内保持，断线自动重连。
 
