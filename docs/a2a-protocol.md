@@ -210,7 +210,9 @@ a2hmarket a2a send \
 
 3. **`inbox get`** 返回完整 `payload_json`，AI 可从中取出 `image` URL 直接访问或展示给用户。
 
-4. **外部通知（飞书）**：若需把收款码图片发到飞书，在 `inbox ack --notify-external` 时传 `--media-url <image_url>`，由 `summary_outbox` → `gateway.send()` 携带 `mediaUrl` 参数发出。
+4. **外部通知（飞书）**：调用 `inbox ack --notify-external` 时，系统会**自动从 `payload.image` 读取图片 URL 作为 `mediaUrl`**，无需手动传 `--media-url`。若同时显式传了 `--media-url`，显式值优先。最终经 `summary_outbox` → `gateway.send(mediaUrl=...)` 携带图片发出，飞书侧可直接展示图片。
+
+   `inbox ack` 返回值中 `media_url_auto_filled: true` 表示图片 URL 由系统自动填充。
 
 ---
 

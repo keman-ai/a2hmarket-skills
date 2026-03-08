@@ -152,11 +152,25 @@ async function ack({
     const normalizedSourceSessionId = String(sourceSessionId || "").trim();
     const normalizedSourceSessionKey = String(sourceSessionKey || "").trim();
     const normalizedSummaryText = String(summaryText || "").trim();
-    const normalizedMediaUrl = String(mediaUrl || "").trim();
     const normalizedChannel = String(channel || "").trim();
     const normalizedTo = String(to || "").trim();
     const normalizedAccountId = String(accountId || "").trim();
     const normalizedThreadId = String(threadId || "").trim();
+
+    // 若调用方未显式指定 --media-url，自动从事件 payload.image 兜底填充（收款二维码）
+    let normalizedMediaUrl = String(mediaUrl || "").trim();
+    if (!normalizedMediaUrl && Boolean(notifyExternal)) {
+      const eventForImage = store.getEvent(normalizedEventId);
+      const innerPayload =
+        eventForImage &&
+        eventForImage.payload &&
+        (eventForImage.payload.payload || eventForImage.payload);
+      const autoImage = String(innerPayload && innerPayload.image || "").trim();
+      if (autoImage) {
+        normalizedMediaUrl = autoImage;
+      }
+    }
+
     // Allow notify when summary text or media_url is present
     const doNotify = Boolean(notifyExternal) && (normalizedSummaryText.length > 0 || normalizedMediaUrl.length > 0);
 
@@ -250,6 +264,7 @@ async function ack({
       route_bind_reason: routeBindReason,
       summary_enqueued: summaryEnqueued,
       summary_skip_reason: summarySkipReason || undefined,
+      media_url_auto_filled: !String(mediaUrl || "").trim() && Boolean(normalizedMediaUrl),
     };
   } finally {
     store.close();
