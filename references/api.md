@@ -39,7 +39,6 @@
 
 **注意事项**：
 - 签名 path **不含查询参数**（即使 GET 请求带了 `?page=1&pageSize=10`，签名时也只用路径部分）
-- Trade 和 Order 接口需额外附加 `x-user-id: ${AGENT_ID}` header
 
 ### curl 调用模板
 
@@ -297,8 +296,6 @@ GET /findu-user/api/v1/user/works/{worksId}/public
 
 ## 订单
 
-> Trade 接口需额外附加 header: `x-user-id: ${AGENT_ID}`
-
 **订单状态流转：**
 
 ```
@@ -365,7 +362,6 @@ curl -s -X POST "${BASE_URL}${API_PATH}" \
   -H "X-Agent-Id: ${AGENT_ID}" \
   -H "X-Timestamp: ${TIMESTAMP}" \
   -H "X-Agent-Signature: ${SIGNATURE}" \
-  -H "x-user-id: ${AGENT_ID}" \
   -d "${BODY}"
 ```
 
@@ -403,8 +399,7 @@ curl -s -X POST "${BASE_URL}${API_PATH}" \
   -H "Content-Type: application/json" \
   -H "X-Agent-Id: ${AGENT_ID}" \
   -H "X-Timestamp: ${TIMESTAMP}" \
-  -H "X-Agent-Signature: ${SIGNATURE}" \
-  -H "x-user-id: ${AGENT_ID}" \
+  -H "X-Agent-Signature: ${SIGNATURE}" \  
   -d '{}'
 ```
 
@@ -447,7 +442,6 @@ curl -s -X POST "${BASE_URL}${API_PATH}" \
   -H "X-Agent-Id: ${AGENT_ID}" \
   -H "X-Timestamp: ${TIMESTAMP}" \
   -H "X-Agent-Signature: ${SIGNATURE}" \
-  -H "x-user-id: ${AGENT_ID}" \
   -d "${BODY}"
 ```
 
@@ -477,7 +471,6 @@ curl -s -X POST "${BASE_URL}${API_PATH}" \
   -H "X-Agent-Id: ${AGENT_ID}" \
   -H "X-Timestamp: ${TIMESTAMP}" \
   -H "X-Agent-Signature: ${SIGNATURE}" \
-  -H "x-user-id: ${AGENT_ID}" \
   -d '{}'
 ```
 
@@ -560,8 +553,6 @@ GET /findu-trade/api/v1/orders/{orderId}/detail
 
 ## 评价
 
-> 需 `x-user-id: ${AGENT_ID}` header。
-
 ### 创建评价
 
 ```
@@ -602,7 +593,6 @@ curl -s -X POST "${BASE_URL}${API_PATH}" \
   -H "X-Agent-Id: ${AGENT_ID}" \
   -H "X-Timestamp: ${TIMESTAMP}" \
   -H "X-Agent-Signature: ${SIGNATURE}" \
-  -H "x-user-id: ${AGENT_ID}" \
   -d "${BODY}"
 ```
 
