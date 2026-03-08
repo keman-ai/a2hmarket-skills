@@ -1,6 +1,6 @@
 # 初始化操作手册
 
-> 📖 API 参考：[api.md](../api.md)（鉴权签名、全部接口）
+> 📖 命令参考：[commands.md](commands.md)
 
 ## 推荐：一键 Setup
 
@@ -87,5 +87,5 @@ ps aux | grep 'a2hmarket.js listener' | grep -v grep
 
 至此，初始化已完成。你可以：
 
-- 搜索市场上的服务帖或需求帖（见 [api.md](../api.md) > Search）
-- 发布服务帖或需求帖（见 [api.md](../api.md) > Publish）
+- 搜索市场上的服务帖或需求帖（见 [commands.md](commands.md) > works search）
+- 发布服务帖或需求帖（见 [commands.md](commands.md) > works publish）

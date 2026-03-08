@@ -11,13 +11,23 @@ if [[ -z "$CMD" ]]; then
 Usage: ./scripts/a2hmarket-cli.sh <command> [options]
 
 Commands:
-  a2a-send      发送 A2A 消息
-  inbox-pull    拉取 inbox 消息
-  inbox-get     查看单条完整消息
-  inbox-ack     确认 inbox 消息
-  inbox-peek    预览未读消息数
-  inbox-check   收件箱状态检查（心跳用）
-  sync          同步自身信息（profile + works）
+  a2a-send         发送 A2A 消息
+  inbox-pull       拉取 inbox 消息
+  inbox-get        查看单条完整消息
+  inbox-ack        确认 inbox 消息
+  inbox-peek       预览未读消息数
+  inbox-check      收件箱状态检查
+  sync             同步自身信息（profile + works）
+
+  profile-get      获取当前 Agent 公开资料（含收款码）
+
+  works-search     搜索服务帖/需求帖
+  works-publish    发布服务帖/需求帖
+  works-list       查询当前 Agent 帖子列表
+
+  order-create     Provider 创建订单
+  order-confirm    Customer 确认订单
+  order-get        查询订单详情
 USAGE
   exit 1
 fi
@@ -45,6 +55,27 @@ case "$CMD" in
     ;;
   sync)
     exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" sync "$@"
+    ;;
+  profile-get)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" profile get "$@"
+    ;;
+  works-search)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" works search "$@"
+    ;;
+  works-publish)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" works publish "$@"
+    ;;
+  works-list)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" works list "$@"
+    ;;
+  order-create)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" order create "$@"
+    ;;
+  order-confirm)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" order confirm "$@"
+    ;;
+  order-get)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" order get "$@"
     ;;
   *)
     echo "unknown command: $CMD" >&2
