@@ -2,6 +2,7 @@ const { nowMs } = require("../store/event-store");
 const { MAIN_SESSION_KEY, resolvePushSession } = require("../config/openclaw-routing");
 const { formatSystemEventText, coerceInt } = require("./message-utils");
 const { scrubSessionRefs } = require("../utils/session-ref");
+const { PEER_SESSION_PREFIX } = require("../gateway/peer-session-manager");
 
 function calculateBackoffMs(attempt, maxDelayMs) {
   const normalizedAttempt = Math.max(1, Math.min(10, coerceInt(attempt, 1)));
@@ -15,10 +16,21 @@ async function runGatewayPush(gatewayClient, text, options) {
     sessionKey: MAIN_SESSION_KEY,
     source: "fallback",
   };
+  const peerSessionManager = options && options.peerSessionManager;
   const started = nowMs();
 
   try {
     const sessionKey = resolved.sessionKey || MAIN_SESSION_KEY;
+
+    // 若目标是 peer 专属 session（非 main），先确保它已自举
+    if (
+      peerSessionManager &&
+      sessionKey !== MAIN_SESSION_KEY &&
+      sessionKey.startsWith(PEER_SESSION_PREFIX)
+    ) {
+      await peerSessionManager.ensureSession(sessionKey);
+    }
+
     await gatewayClient.chatSend({ sessionKey, message: text });
     const elapsed = nowMs() - started;
     return { ok: true, detail: `elapsed_ms=${elapsed} gateway chat.send ok session=${scrubSessionRefs(sessionKey)}` };
@@ -44,9 +56,10 @@ async function flushPushOutbox(store, cfg, logger, options) {
   }
   const nowFn = options && typeof options.now === "function" ? options.now : nowMs;
   const gatewayClient = options && options.gatewayClient;
+  const peerSessionManager = options && options.peerSessionManager;
   const pushFn = options && typeof options.push === "function"
     ? options.push
-    : (_, text, opts) => runGatewayPush(gatewayClient, text, opts);
+    : (_, text, opts) => runGatewayPush(gatewayClient, text, { ...opts, peerSessionManager });
 
   const tsNow = nowFn();
 

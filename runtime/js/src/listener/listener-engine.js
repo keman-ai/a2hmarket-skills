@@ -6,6 +6,7 @@ const { acquireSingleInstanceLock } = require("./lock");
 const { startA2aService } = require("../a2a/service");
 const { formatSessionRef } = require("../utils/session-ref");
 const { GatewayClient } = require("../gateway/gateway-client");
+const { PeerSessionManager } = require("../gateway/peer-session-manager");
 const {
   looksLikeSessionKey,
   looksLikeUuid,
@@ -74,6 +75,7 @@ async function runListener(cfg, options) {
   const a2aService = await startA2aService({ cfg, store, logger });
 
   let gw = null;
+  let peerSessionManager = null;
   if (cfg.pushEnabled) {
     gw = new GatewayClient({ logger });
     try {
@@ -100,6 +102,10 @@ async function runListener(cfg, options) {
         logger.warn(`session bootstrap failed, push disabled: ${boot.detail}`);
         cfg.pushEnabled = false;
       }
+    }
+
+    if (cfg.pushEnabled) {
+      peerSessionManager = new PeerSessionManager(gw, logger);
     }
   }
 
@@ -132,7 +138,7 @@ async function runListener(cfg, options) {
       };
       
       try {
-        const pushStats = await flushPushOutbox(store, cfg, logger, { gatewayClient: gw });
+        const pushStats = await flushPushOutbox(store, cfg, logger, { gatewayClient: gw, peerSessionManager });
         stats.pushDispatched = pushStats.dispatched;
         stats.pushAcked = pushStats.acked;
         stats.pushRetried = pushStats.retried;

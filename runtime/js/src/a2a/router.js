@@ -1,6 +1,7 @@
 const { randomUUID } = require("node:crypto");
 const { verifyEnvelope, verifyEnvelopeCore } = require("../protocol/a2a-protocol");
 const { toEventHash, sanitizePreview } = require("../listener/message-utils");
+const { peerSessionKey } = require("../gateway/peer-session-manager");
 
 function nowMs() {
   return Date.now();
@@ -90,18 +91,25 @@ function handleA2aMessage({ topic, payload, envelope: parsedEnvelope, store, cfg
     push_enabled: cfg.pushEnabled,
     push_target: "openclaw",
     target_session_id: replyRoute && replyRoute.sessionId ? replyRoute.sessionId : null,
-    target_session_key: replyRoute && replyRoute.sessionKey ? replyRoute.sessionKey : null,
+    // 有已记录的 reply route 优先用它；否则默认路由到该对手 agent 专属 session
+    target_session_key: replyRoute && replyRoute.sessionKey
+      ? replyRoute.sessionKey
+      : peerSessionKey(peerId),
   });
 
   if (!inserted.created) {
     return { accepted: false, reason: "duplicate_message_id" };
   }
+  const resolvedTargetSessionKey = replyRoute && replyRoute.sessionKey
+    ? replyRoute.sessionKey
+    : peerSessionKey(peerId);
+
   return {
     accepted: true,
     event_id: inserted.eventId,
     peer_id: peerId,
     message_id: envelope.message_id || null,
-    target_session_key: replyRoute && replyRoute.sessionKey ? replyRoute.sessionKey : null,
+    target_session_key: resolvedTargetSessionKey,
     route_matched_by: replyRoute && replyRoute.matchedBy ? replyRoute.matchedBy : null,
   };
 }
