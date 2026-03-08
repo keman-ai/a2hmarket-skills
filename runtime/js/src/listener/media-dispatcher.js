@@ -17,19 +17,19 @@ async function runGatewaySend(gatewayClient, row) {
     };
     if (row.account_id) params.accountId = String(row.account_id);
     if (row.thread_id) params.threadId = String(row.thread_id);
-    if (row.summary_text) params.message = String(row.summary_text);
+    if (row.message_text) params.message = String(row.message_text);
     if (row.media_url) params.mediaUrl = String(row.media_url);
 
     await gatewayClient.send(params);
     const elapsed = nowMs() - started;
-    return { ok: true, detail: `elapsed_ms=${elapsed} gateway send ok channel=${row.channel}` };
+    return { ok: true, detail: `elapsed_ms=${elapsed} gateway send ok channel=${row.channel} media=${!!row.media_url}` };
   } catch (err) {
     const elapsed = nowMs() - started;
     return { ok: false, detail: `elapsed_ms=${elapsed} ${err.message || String(err)}`.trim() };
   }
 }
 
-async function flushSummaryOutbox(store, cfg, logger, options) {
+async function flushMediaOutbox(store, cfg, logger, options) {
   if (!cfg.pushEnabled) {
     return { sent: 0, retried: 0, failed: 0 };
   }
@@ -40,8 +40,8 @@ async function flushSummaryOutbox(store, cfg, logger, options) {
     : (_, row) => runGatewaySend(gatewayClient, row);
 
   const batchSize = coerceInt(cfg.pushBatchSize, 20);
-  const maxRetries = coerceInt(cfg.summaryMaxRetries, 5);
-  const rows = store.listPendingSummaryOutbox({
+  const maxRetries = coerceInt(cfg.mediaMaxRetries, 5);
+  const rows = store.listPendingMediaOutbox({
     now: nowFn(),
     batchSize,
   });
@@ -53,23 +53,23 @@ async function flushSummaryOutbox(store, cfg, logger, options) {
   for (const row of rows) {
     const result = await sendFn(cfg, row);
     if (result.ok) {
-      store.markSummarySent({ outboxId: row.id });
+      store.markMediaSent({ outboxId: row.id });
       sent += 1;
       logger.info(
-        `summary sent event_id=${row.event_id} channel=${row.channel} to=${row.to_target} attempt=${row.attempt}`
+        `media sent event_id=${row.event_id} channel=${row.channel} to=${row.to_target} media=${!!row.media_url} attempt=${row.attempt}`
       );
     } else {
       const nextAttempt = coerceInt(row.attempt, 0) + 1;
       if (nextAttempt > maxRetries) {
-        store.markSummaryFailed({ outboxId: row.id, lastError: result.detail });
+        store.markMediaFailed({ outboxId: row.id, lastError: result.detail });
         failed += 1;
         logger.error(
-          `summary failed permanently event_id=${row.event_id} attempt=${nextAttempt} detail=${(result.detail || "").slice(0, 200)}`
+          `media failed permanently event_id=${row.event_id} attempt=${nextAttempt} detail=${(result.detail || "").slice(0, 200)}`
         );
       } else {
         const delayMs = calculateBackoffMs(nextAttempt, cfg.pushRetryMaxDelayMs);
         const nextRetryAt = nowFn() + delayMs;
-        store.markSummaryRetry({
+        store.markMediaRetry({
           outboxId: row.id,
           attempt: nextAttempt,
           nextRetryAt,
@@ -77,7 +77,7 @@ async function flushSummaryOutbox(store, cfg, logger, options) {
         });
         retried += 1;
         logger.warn(
-          `summary retry event_id=${row.event_id} attempt=${nextAttempt} retry_in_ms=${delayMs} detail=${(result.detail || "").slice(0, 200)}`
+          `media retry event_id=${row.event_id} attempt=${nextAttempt} retry_in_ms=${delayMs} detail=${(result.detail || "").slice(0, 200)}`
         );
       }
     }
@@ -87,6 +87,6 @@ async function flushSummaryOutbox(store, cfg, logger, options) {
 }
 
 module.exports = {
-  flushSummaryOutbox,
+  flushMediaOutbox,
   calculateBackoffMs,
 };

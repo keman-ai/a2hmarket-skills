@@ -17,6 +17,15 @@ function isUniqueConstraint(err) {
   return msg.includes("UNIQUE constraint failed");
 }
 
+function columnExistsInDb(db, tableName, columnName) {
+  try {
+    const rows = db.prepare(`PRAGMA table_info(${tableName});`).all();
+    return rows.some((row) => String(row.name) === columnName);
+  } catch {
+    return false;
+  }
+}
+
 function parseJsonSafe(raw, fallback) {
   try {
     return JSON.parse(String(raw || ""));
@@ -713,14 +722,17 @@ class EventStore {
     };
   }
 
-  // --- summary_outbox methods ---
+  // --- media_outbox methods ---
+  // 专用于带图片（mediaUrl）的外部渠道通知，如飞书收款二维码推送
 
-  enqueueSummaryOutbox({ eventId, sessionKey, channel, to, accountId, threadId, summaryText, mediaUrl }) {
+  enqueueMediaOutbox({ eventId, sessionKey, channel, to, accountId, threadId, messageText, mediaUrl }) {
     const ts = nowMs();
+    // 兼容旧列名 summary_text（低版本 SQLite 迁移后列名未变时）
+    const textCol = columnExistsInDb(this.db, "media_outbox", "message_text") ? "message_text" : "summary_text";
     try {
       this.db.prepare(`
-        INSERT INTO summary_outbox
-          (event_id, session_key, channel, to_target, account_id, thread_id, summary_text, media_url,
+        INSERT INTO media_outbox
+          (event_id, session_key, channel, to_target, account_id, thread_id, ${textCol}, media_url,
            status, attempt, next_retry_at, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?)
       `).run(
@@ -730,7 +742,7 @@ class EventStore {
         String(to),
         nullableText(accountId),
         nullableText(threadId),
-        String(summaryText),
+        String(messageText),
         nullableText(mediaUrl),
         ts,
         ts,
@@ -745,12 +757,15 @@ class EventStore {
     }
   }
 
-  listPendingSummaryOutbox({ now, batchSize }) {
+  listPendingMediaOutbox({ now, batchSize }) {
     const tsNow = coerceInt(now, nowMs());
+    // 兼容旧列名 summary_text
+    const textCol = columnExistsInDb(this.db, "media_outbox", "message_text") ? "message_text" : "summary_text";
     return this.db.prepare(`
-      SELECT id, event_id, session_key, channel, to_target AS to_target,
-             account_id, thread_id, summary_text, media_url, status, attempt, next_retry_at, updated_at
-      FROM summary_outbox
+      SELECT id, event_id, session_key, channel, to_target,
+             account_id, thread_id, ${textCol} AS message_text, media_url,
+             status, attempt, next_retry_at, updated_at
+      FROM media_outbox
       WHERE status IN ('PENDING', 'RETRY')
         AND next_retry_at <= ?
       ORDER BY id ASC
@@ -758,19 +773,19 @@ class EventStore {
     `).all(tsNow, coerceInt(batchSize, 20));
   }
 
-  markSummarySent({ outboxId }) {
+  markMediaSent({ outboxId }) {
     const ts = nowMs();
     this.db.prepare(`
-      UPDATE summary_outbox
+      UPDATE media_outbox
       SET status='SENT', updated_at=?, last_error=NULL
       WHERE id=?
     `).run(ts, coerceInt(outboxId, 0));
   }
 
-  markSummaryRetry({ outboxId, attempt, nextRetryAt, lastError }) {
+  markMediaRetry({ outboxId, attempt, nextRetryAt, lastError }) {
     const ts = nowMs();
     this.db.prepare(`
-      UPDATE summary_outbox
+      UPDATE media_outbox
       SET status='RETRY', attempt=?, next_retry_at=?, updated_at=?, last_error=?
       WHERE id=?
     `).run(
@@ -782,10 +797,10 @@ class EventStore {
     );
   }
 
-  markSummaryFailed({ outboxId, lastError }) {
+  markMediaFailed({ outboxId, lastError }) {
     const ts = nowMs();
     this.db.prepare(`
-      UPDATE summary_outbox
+      UPDATE media_outbox
       SET status='FAILED', updated_at=?, last_error=?
       WHERE id=?
     `).run(ts, String(lastError || "").slice(0, 1000), coerceInt(outboxId, 0));

@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS consumer_ack (
 CREATE INDEX IF NOT EXISTS idx_consumer_ack_event_id
   ON consumer_ack(event_id);
 
-CREATE TABLE IF NOT EXISTS summary_outbox (
+CREATE TABLE IF NOT EXISTS media_outbox (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   event_id TEXT NOT NULL UNIQUE,
   session_key TEXT,
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS summary_outbox (
   to_target TEXT NOT NULL,
   account_id TEXT,
   thread_id TEXT,
-  summary_text TEXT NOT NULL,
+  message_text TEXT NOT NULL,
   media_url TEXT,
   status TEXT NOT NULL DEFAULT 'PENDING',
   attempt INTEGER NOT NULL DEFAULT 0,
@@ -106,8 +106,8 @@ CREATE TABLE IF NOT EXISTS summary_outbox (
   updated_at INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_summary_outbox_status_retry
-  ON summary_outbox(status, next_retry_at);
+CREATE INDEX IF NOT EXISTS idx_media_outbox_status_retry
+  ON media_outbox(status, next_retry_at);
 `;
 
 function columnExists(db, tableName, columnName) {
@@ -165,10 +165,23 @@ function applySchema(db) {
       ON a2a_outbox(target_agent_id, updated_at);
   `);
 
-  // summary_outbox migration for existing databases
-  if (!tableExists(db, "summary_outbox")) {
+  // media_outbox migration: rename from legacy summary_outbox if needed, then ensure table exists
+  if (tableExists(db, "summary_outbox") && !tableExists(db, "media_outbox")) {
+    // 旧表重命名，保留历史数据
+    db.exec("ALTER TABLE summary_outbox RENAME TO media_outbox;");
+    // 旧列 summary_text 重命名为 message_text（SQLite >= 3.25.0）
+    try {
+      db.exec("ALTER TABLE media_outbox RENAME COLUMN summary_text TO message_text;");
+    } catch {
+      // 低版本 SQLite 不支持列重命名，保持原列名运行
+    }
     db.exec(`
-      CREATE TABLE IF NOT EXISTS summary_outbox (
+      CREATE INDEX IF NOT EXISTS idx_media_outbox_status_retry
+        ON media_outbox(status, next_retry_at);
+    `);
+  } else if (!tableExists(db, "media_outbox")) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS media_outbox (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         event_id TEXT NOT NULL UNIQUE,
         session_key TEXT,
@@ -176,7 +189,7 @@ function applySchema(db) {
         to_target TEXT NOT NULL,
         account_id TEXT,
         thread_id TEXT,
-        summary_text TEXT NOT NULL,
+        message_text TEXT NOT NULL,
         media_url TEXT,
         status TEXT NOT NULL DEFAULT 'PENDING',
         attempt INTEGER NOT NULL DEFAULT 0,
@@ -187,11 +200,11 @@ function applySchema(db) {
       );
     `);
     db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_summary_outbox_status_retry
-        ON summary_outbox(status, next_retry_at);
+      CREATE INDEX IF NOT EXISTS idx_media_outbox_status_retry
+        ON media_outbox(status, next_retry_at);
     `);
-  } else if (!columnExists(db, "summary_outbox", "media_url")) {
-    db.exec("ALTER TABLE summary_outbox ADD COLUMN media_url TEXT;");
+  } else if (!columnExists(db, "media_outbox", "media_url")) {
+    db.exec("ALTER TABLE media_outbox ADD COLUMN media_url TEXT;");
   }
 }
 

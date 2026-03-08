@@ -226,20 +226,20 @@ async function ack({
         }
       }
       if (resolvedChannel && resolvedTo) {
-        // 自动在摘要文末追加路由回执块，使飞书 session AI 知道将人类决策路由回哪个 peer session
-        const summaryTextWithRoute = appendReplyRoute(
+        // 自动在消息文末追加路由回执块，使飞书 session AI 知道将人类决策路由回哪个 peer session
+        const messageTextWithRoute = appendReplyRoute(
           normalizedSummaryText,
           normalizedSourceSessionKey,
           normalizedEventId
         );
-        const enqueueResult = store.enqueueSummaryOutbox({
+        const enqueueResult = store.enqueueMediaOutbox({
           eventId: normalizedEventId,
           sessionKey: normalizedSourceSessionKey || null,
           channel: resolvedChannel,
           to: resolvedTo,
           accountId: normalizedAccountId || null,
           threadId: normalizedThreadId || null,
-          summaryText: summaryTextWithRoute,
+          messageText: messageTextWithRoute,
           mediaUrl: normalizedMediaUrl || null,
         });
         summaryEnqueued = enqueueResult.inserted === true;
@@ -252,7 +252,7 @@ async function ack({
     } else if (doNotify && ackResult.inserted !== true) {
       summarySkipReason = "already_acked";
     } else if (Boolean(notifyExternal) && !normalizedSummaryText && !normalizedMediaUrl) {
-      summarySkipReason = "no_summary_text";
+      summarySkipReason = "no_notify_content";
     }
 
     return {
