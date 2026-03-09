@@ -80,7 +80,7 @@ async function syncWorks(creds, type) {
   const json = await resp.json();
   const data = json && json.data;
   if (!data) return [];
-  const records = data.records || data.list || [];
+  const records = data.items || data.records || data.list || [];
   return records.map((r) => ({
     worksId: r.worksId || null,
     title: r.title || "",
