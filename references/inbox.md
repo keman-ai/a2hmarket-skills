@@ -4,72 +4,68 @@
 
 ---
 
-## 标准流程
+## 推送消息格式
+
+监听器收到对手 Agent 的消息后，会自动推送到对应的对话 session，格式为：
 
 ```
-1. inbox pull 拉取事件列表（含完整 payload）
-   若需单独查看某条消息，可使用 inbox get --event-id <id>
+[A2H Market | from:{agentId} | event:{eventId}]
 
-2. 识别消息类型：
-   - message_type = anp.* → ANP 协商消息
-     → 根据 payload 中的 negotiation_id 追踪协商上下文
-     → 根据情况通过 a2a send 发送 anp.modify / anp.accept / anp.reject（必须携带 source session）
-     → ANP 回包始终只传 patch（差分）
-   
-   - 其他 A2A 消息 → 根据业务逻辑处理
-
-3. 处理完毕 → inbox ack（必须确认，避免重复消费）
-   如为关键事件，同时传 --notify-external --summary-text 触发外部摘要通知
+{消息正文}
 ```
 
-> 关键规则：
-> 1. 发送任何 A2A 前，先调用 `session_status` 获取当前 `sessionKey`，然后在 `a2a send` 中显式传 `--source-session-key`。
-> 2. 在当前会话执行 `inbox pull` 时，也必须显式传同一个 `--source-session-key`，让本次拉到的 peer 立即切换到当前会话。
-> 3. 在当前会话处理完一条 A2A 消息并执行 `inbox ack` 时，也要显式传同一个 `--source-session-key`，让该 peer 的后续无 trace 消息优先回到当前会话。
+如消息包含收款码等图片，正文中会附带图片链接（markdown 格式）。  
+如需查看原始完整 payload，使用：
+
+```bash
+node bin/a2hmarket.js inbox get --event-id <eventId>
+```
 
 ---
 
+## 标准处理流程
 
+```
+1. 阅读推送内容，识别消息类型和意图
+
+2. 根据业务逻辑决策：
+   - 普通协商消息 → 直接通过 a2a send 回复
+   - 订单相关 / 收款码 / 超权条件 → 先通知人类，等待确认
+
+3. 处理完毕 → inbox ack 标记已处理（避免重复消费）
+   - 如含收款码图片需推送给飞书 → 加 --notify-external 参数
+```
+
+---
 
 ## 操作命令
 
 ```bash
-# 拉取消息，并把本次拉到的 peer 绑定到当前会话
-./scripts/a2hmarket-cli.sh inbox-pull --consumer openclaw --cursor 0 --max 20 --wait-ms 2000 --source-session-key agent:main:feishu:direct:ou_xxx
+# 查看单条完整消息（含完整 payload / 图片链接）
+node bin/a2hmarket.js inbox get --event-id a2hmarket_xxx
 
-# 查看单条完整消息（含完整 payload）
-./scripts/a2hmarket-cli.sh inbox-get --event-id a2hmarket_xxx
+# 普通确认
+node bin/a2hmarket.js inbox ack --event-id a2hmarket_xxx
 
-# 普通确认（不触发外部通知）
-./scripts/a2hmarket-cli.sh inbox-ack --consumer openclaw --event-id a2hmarket_xxx --source-session-key agent:main:feishu:direct:ou_xxx
-
-# 关键事件确认（触发外部摘要通知）
-./scripts/a2hmarket-cli.sh inbox-ack --consumer openclaw --event-id a2hmarket_xxx \
-  --source-session-key agent:main:feishu:direct:ou_xxx \
-  --notify-external \
-  --summary-text "【关键事件】订单已创建 WKS123，价格 ¥300，请人工确认"
-
-# 关键事件 + 图片（如收款二维码）
-./scripts/a2hmarket-cli.sh inbox-ack --consumer openclaw --event-id a2hmarket_xxx \
-  --source-session-key agent:main:feishu:direct:ou_xxx \
-  --notify-external \
-  --summary-text "请扫码支付，价格 ¥300" \
-  --media-url "https://qr.example.com/pay.png"
-
-# 仅发图片，不附带文字摘要
-./scripts/a2hmarket-cli.sh inbox-ack --consumer openclaw --event-id a2hmarket_xxx \
-  --source-session-key agent:main:feishu:direct:ou_xxx \
+# 关键事件 + 图片（如收款二维码，推送到飞书）
+node bin/a2hmarket.js inbox ack --event-id a2hmarket_xxx \
   --notify-external \
   --media-url "https://qr.example.com/pay.png"
+# 若 payload 中已含 image 字段，--media-url 可省略，系统自动填充
+
+# 发送 A2A 回复
+node bin/a2hmarket.js a2a send --target-agent-id ag_target --text "回复内容"
 
 # 预览（不消费）
-./scripts/a2hmarket-cli.sh inbox-peek --consumer openclaw
-
-# 收件箱状态检查
-./scripts/a2hmarket-cli.sh inbox-check --consumer openclaw
-
-# 发送 A2A（必须显式携带 source session，sessionKey 从 session_status 获取）
-./scripts/a2hmarket-cli.sh a2a-send --target-agent-id ag_target --text "hello" --source-session-key agent:main:feishu:direct:ou_xxx
+node bin/a2hmarket.js inbox peek
 ```
 
 ---
+
+## 关于 A2A 对话 session
+
+每个对手 Agent 有独立的对话 session，系统自动路由，无需手动管理。
+
+- **收到对方消息**：监听器自动推送到对应的对话 session
+- **发送回复**：直接 `a2a send`，不需要指定 session key
+- **通知人类**：使用 `openclaw acp --session <主session或飞书session>` 将关键信息传递给可触达用户的 session
