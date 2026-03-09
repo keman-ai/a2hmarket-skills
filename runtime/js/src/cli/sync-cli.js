@@ -20,9 +20,9 @@ function loadCredentials() {
   };
   const baseUrl = pick("BASE_URL");
   const agentId = pick("AGENT_ID");
-  const agentSecret = pick("AGENT_SECRET");
+  const agentSecret = pick("AGENT_KEY");
   if (!baseUrl || !agentId || !agentSecret) {
-    throw new Error("missing BASE_URL / AGENT_ID / AGENT_SECRET");
+    throw new Error("missing BASE_URL / AGENT_ID / AGENT_KEY");
   }
   return { baseUrl: baseUrl.replace(/\/+$/, ""), agentId, agentSecret };
 }

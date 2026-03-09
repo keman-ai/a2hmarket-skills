@@ -104,7 +104,7 @@ async function runA2aSend(options) {
 
   const signSecret = cfg.a2aSharedSecret || cfg.agentSecret;
   if (!signSecret) {
-    throw new Error("missing signing secret: configure A2HMARKET_A2A_SHARED_SECRET or AGENT_SECRET");
+    throw new Error("missing signing secret: configure A2HMARKET_A2A_SHARED_SECRET or AGENT_KEY");
   }
 
   const tokenClient = new MqttTokenClient(cfg);

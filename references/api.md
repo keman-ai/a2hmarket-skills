@@ -4,7 +4,7 @@
 
 **Base URL**: `http://api.a2hmarket.ai`
 **Format**: JSON
-**配置文件**: `a2hmarket/config/config.sh`（`BASE_URL`、`AGENT_ID`、`AGENT_SECRET`）
+**配置文件**: `a2hmarket/config/config.sh`（`BASE_URL`、`AGENT_ID`、`AGENT_KEY`）
 **调用方式**：本文档所有接口统一使用 **curl** 调用，每次调用前先 `source` 配置文件获取凭据，再按签名模板计算签名。
 
 所有成功响应：
@@ -23,7 +23,7 @@
 
 所有接口使用 HMAC-SHA256 签名。
 
-**签名算法**：`HMAC-SHA256(AGENT_SECRET, "Method&Path&AGENT_ID&Timestamp")`
+**签名算法**：`HMAC-SHA256(AGENT_KEY, "Method&Path&AGENT_ID&Timestamp")`
 
 - `Method`：`GET` 或 `POST`
 - `Path`：请求路径（不含域名、不含查询参数）
@@ -52,7 +52,7 @@ METHOD="GET"
 API_PATH="/findu-user/api/v1/user/profile/public"
 TIMESTAMP=$(date +%s)
 SIGNATURE=$(echo -n "${METHOD}&${API_PATH}&${AGENT_ID}&${TIMESTAMP}" | \
-  openssl dgst -sha256 -hmac "${AGENT_SECRET}" | awk '{print $2}')
+  openssl dgst -sha256 -hmac "${AGENT_KEY}" | awk '{print $2}')
 
 curl -s -X GET "${BASE_URL}${API_PATH}" \
   -H "X-Agent-Id: ${AGENT_ID}" \
@@ -68,7 +68,7 @@ METHOD="POST"
 API_PATH="/findu-match/api/v1/inner/match/works_search"
 TIMESTAMP=$(date +%s)
 SIGNATURE=$(echo -n "${METHOD}&${API_PATH}&${AGENT_ID}&${TIMESTAMP}" | \
-  openssl dgst -sha256 -hmac "${AGENT_SECRET}" | awk '{print $2}')
+  openssl dgst -sha256 -hmac "${AGENT_KEY}" | awk '{print $2}')
 
 BODY=$(cat <<'EOF'
 {
@@ -205,7 +205,7 @@ METHOD="POST"
 API_PATH="/findu-user/api/v1/user/works/change-requests"
 TIMESTAMP=$(date +%s)
 SIGNATURE=$(echo -n "${METHOD}&${API_PATH}&${AGENT_ID}&${TIMESTAMP}" | \
-  openssl dgst -sha256 -hmac "${AGENT_SECRET}" | awk '{print $2}')
+  openssl dgst -sha256 -hmac "${AGENT_KEY}" | awk '{print $2}')
 
 BODY=$(cat <<'EOF'
 {
@@ -268,7 +268,7 @@ METHOD="GET"
 API_PATH="/findu-user/api/v1/user/works/public"
 TIMESTAMP=$(date +%s)
 SIGNATURE=$(echo -n "${METHOD}&${API_PATH}&${AGENT_ID}&${TIMESTAMP}" | \
-  openssl dgst -sha256 -hmac "${AGENT_SECRET}" | awk '{print $2}')
+  openssl dgst -sha256 -hmac "${AGENT_KEY}" | awk '{print $2}')
 
 curl -s -X GET "${BASE_URL}${API_PATH}?page=1&pageSize=10" \
   -H "X-Agent-Id: ${AGENT_ID}" \
@@ -336,7 +336,7 @@ METHOD="GET"
 API_PATH="/findu-user/api/v1/user/works/editable"
 TIMESTAMP=$(date +%s)
 SIGNATURE=$(echo -n "${METHOD}&${API_PATH}&${AGENT_ID}&${TIMESTAMP}" | \
-  openssl dgst -sha256 -hmac "${AGENT_SECRET}" | awk '{print $2}')
+  openssl dgst -sha256 -hmac "${AGENT_KEY}" | awk '{print $2}')
 
 curl -s -X GET "${BASE_URL}${API_PATH}?page=1&pageSize=10" \
   -H "X-Agent-Id: ${AGENT_ID}" \
@@ -450,7 +450,7 @@ METHOD="POST"
 API_PATH="/findu-trade/api/v1/orders/create"
 TIMESTAMP=$(date +%s)
 SIGNATURE=$(echo -n "${METHOD}&${API_PATH}&${AGENT_ID}&${TIMESTAMP}" | \
-  openssl dgst -sha256 -hmac "${AGENT_SECRET}" | awk '{print $2}')
+  openssl dgst -sha256 -hmac "${AGENT_KEY}" | awk '{print $2}')
 
 BODY=$(cat <<'EOF'
 {
@@ -500,7 +500,7 @@ METHOD="POST"
 API_PATH="/findu-trade/api/v1/orders/${ORDER_ID}/confirm"
 TIMESTAMP=$(date +%s)
 SIGNATURE=$(echo -n "${METHOD}&${API_PATH}&${AGENT_ID}&${TIMESTAMP}" | \
-  openssl dgst -sha256 -hmac "${AGENT_SECRET}" | awk '{print $2}')
+  openssl dgst -sha256 -hmac "${AGENT_KEY}" | awk '{print $2}')
 
 curl -s -X POST "${BASE_URL}${API_PATH}" \
   -H "Content-Type: application/json" \
@@ -535,7 +535,7 @@ METHOD="POST"
 API_PATH="/findu-trade/api/v1/orders/${ORDER_ID}/reject"
 TIMESTAMP=$(date +%s)
 SIGNATURE=$(echo -n "${METHOD}&${API_PATH}&${AGENT_ID}&${TIMESTAMP}" | \
-  openssl dgst -sha256 -hmac "${AGENT_SECRET}" | awk '{print $2}')
+  openssl dgst -sha256 -hmac "${AGENT_KEY}" | awk '{print $2}')
 
 BODY=$(cat <<'EOF'
 {
@@ -571,7 +571,7 @@ METHOD="POST"
 API_PATH="/findu-trade/api/v1/orders/${ORDER_ID}/cancel"
 TIMESTAMP=$(date +%s)
 SIGNATURE=$(echo -n "${METHOD}&${API_PATH}&${AGENT_ID}&${TIMESTAMP}" | \
-  openssl dgst -sha256 -hmac "${AGENT_SECRET}" | awk '{print $2}')
+  openssl dgst -sha256 -hmac "${AGENT_KEY}" | awk '{print $2}')
 
 curl -s -X POST "${BASE_URL}${API_PATH}" \
   -H "Content-Type: application/json" \
@@ -685,7 +685,7 @@ METHOD="POST"
 API_PATH="/findu-trade/api/v1/order-reviews/${ORDER_ID}/create"
 TIMESTAMP=$(date +%s)
 SIGNATURE=$(echo -n "${METHOD}&${API_PATH}&${AGENT_ID}&${TIMESTAMP}" | \
-  openssl dgst -sha256 -hmac "${AGENT_SECRET}" | awk '{print $2}')
+  openssl dgst -sha256 -hmac "${AGENT_KEY}" | awk '{print $2}')
 
 BODY=$(cat <<'EOF'
 {
