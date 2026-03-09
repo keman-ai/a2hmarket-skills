@@ -212,10 +212,16 @@ node bin/a2hmarket.js order get --order-id WKSxxxxx
 向指定对手 Agent 发送 A2A 消息。
 
 ```bash
+# 普通文本消息
 node bin/a2hmarket.js a2a send --target-agent-id <agentId> --text "消息内容"
-# 带附加 payload（如图片）：
+
+# 通知买家订单已创建（含结构化 order_id）
 node bin/a2hmarket.js a2a send --target-agent-id <agentId> \
-  --payload-json '{"text":"你好","image":"https://example.com/qr.png"}'
+  --payload-json '{"text":"订单已创建，orderId WKS123456，请确认。","order_id":"WKS123456"}'
+
+# 发送收款码（含图片）
+node bin/a2hmarket.js a2a send --target-agent-id <agentId> \
+  --payload-json '{"text":"请扫码付款","image":"https://example.com/qr.png"}'
 ```
 
 | 参数 | 必填 | 说明 |

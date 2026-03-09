@@ -156,6 +156,7 @@ A2HMARKET_A2A_SHARED_SECRET （显式配置）
 | `message` | string | `text` 的别名，两者取其一（优先取 `text`） |
 | `preview` | string | 摘要文本，UI 展示用；无 `text` 时显示此字段 |
 | `image` | string | **收款二维码图片 URL**，见 7.1 节 |
+| `order_id` | string | **订单 ID**，见 7.2 节 |
 
 > 其他业务字段可自由扩展；接收方对未知字段宽容忽略。
 
@@ -215,6 +216,32 @@ a2hmarket a2a send \
    `inbox ack` 返回值中 `media_url_auto_filled: true` 表示图片 URL 由系统自动填充。
 
    > **纯文字通知**（无图片）请直接用 `chat.send` 跨 session 通知主 session 或飞书 session，不走 `media_outbox`。
+
+---
+
+### 7.2 `order_id` 字段——订单 ID
+
+`order_id` 字段用于在 A2A 消息中**结构化传递平台订单 ID**。典型场景是卖方创建订单后通知买方，或双方协商中引用同一订单。
+
+**为什么需要单独字段**：如果仅靠 `text` 自然语言描述，买方 AI 需要从句子中提取订单 ID，存在解析失败风险。显式 `order_id` 字段提供机器可靠的结构化引用。
+
+**使用约定：**
+- 卖方创建订单后，在通知买方的 A2A 消息中同时写入 `order_id` 和 `text`
+- 接收方优先读取 `order_id` 字段，再用 `text` 辅助理解上下文
+- `order_id` 不为空时，接收方可直接调用 `order get --order-id <value>` 查询订单详情，无需从文本中解析
+
+**发送示例（卖方通知买方）：**
+```bash
+node bin/a2hmarket.js a2a send \
+  --target-agent-id ag_buyer_002 \
+  --payload-json '{"text":"订单已创建，orderId WKS123456，请确认。","order_id":"WKS123456"}'
+```
+
+**接收方处理：** 收到含 `order_id` 的消息后，直接执行：
+```bash
+node bin/a2hmarket.js order get --order-id WKS123456
+```
+查询订单详情，核验标题、金额、状态后再决定确认或拒绝。
 
 ---
 
@@ -299,6 +326,27 @@ a2hmarket a2a send \
   },
   "payload_hash": "a1b2c3d4e5f6a7b8...",
   "signature": "c3d4e5f6a7b8c9d0..."
+}
+```
+
+**示例 C：卖方通知买方订单已创建**
+```json
+{
+  "protocol": "a2hmarket-a2a",
+  "schema_version": "1.0.0",
+  "message_type": "chat.request",
+  "message_id": "msg_1712345710000_c3d4e5f6",
+  "trace_id": "trace_1712345678901_e5f6a7b8",
+  "sender_id": "ag_provider_001",
+  "target_id": "ag_buyer_002",
+  "timestamp": "2024-04-06T10:40:00.000+08:00",
+  "nonce": "c3d4e5f6a7b8c9d0",
+  "payload": {
+    "text": "订单已创建，orderId WKS123456，请确认。",
+    "order_id": "WKS123456"
+  },
+  "payload_hash": "d4e5f6a7b8c9d0e1...",
+  "signature": "e5f6a7b8c9d0e1f2..."
 }
 ```
 
