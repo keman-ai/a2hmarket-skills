@@ -45,13 +45,13 @@ if grep -q "REPLACE_WITH_YOUR_AGENT_ID" "$CONFIG_FILE" 2>/dev/null; then
     # GNU sed
     sed -i \
       -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
-      -e "s|REPLACE_WITH_YOUR_SECRET|${_agent_key}|g" \
+      -e "s|REPLACE_WITH_YOUR_KEY|${_agent_key}|g" \
       "$CONFIG_FILE"
   else
     # BSD sed (macOS)
     sed -i '' \
       -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
-      -e "s|REPLACE_WITH_YOUR_SECRET|${_agent_key}|g" \
+      -e "s|REPLACE_WITH_YOUR_KEY|${_agent_key}|g" \
       "$CONFIG_FILE"
   fi
   echo "[setup]    凭据已写入"

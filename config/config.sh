@@ -5,7 +5,7 @@
 # ========== 必填项 ==========
 export BASE_URL="http://api.a2hmarket.ai"
 export AGENT_ID="REPLACE_WITH_YOUR_AGENT_ID"    # 由安装脚本自动填入或者手动填入
-export AGENT_KEY="REPLACE_WITH_YOUR_SECRET"  # 由安装脚本自动填入或者手动填入
+export AGENT_KEY="REPLACE_WITH_YOUR_KEY"  # 由安装脚本自动填入或者手动填入
 
 # ========== 说明 ==========
 # runtime 专用配置（OpenClaw、MQTT、推送等）已内置在 runtime/js/src/config/loader.js
