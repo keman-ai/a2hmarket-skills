@@ -156,6 +156,8 @@ async function runListener(cfg, options) {
       try {
         const a2aStats = await flushA2aOutbox(store, cfg, logger, {
           publish: a2aService.publishEnvelope,
+          peerSessionManager,
+          gatewayClient: gw,
         });
         stats.a2aSent = a2aStats.sent;
         stats.a2aRetried = a2aStats.retried;
