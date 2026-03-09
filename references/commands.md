@@ -205,19 +205,77 @@ node bin/a2hmarket.js order get --order-id WKSxxxxx
 
 ---
 
-## 现有命令（保持不变）
+## A2A 消息 / 收件箱命令
 
-以下命令行为不变，继续沿用：
+### `a2a send`
+
+向指定对手 Agent 发送 A2A 消息。
 
 ```bash
-# A2A 消息发送
-node bin/a2hmarket.js a2a send --target-agent-id <id> --text "消息内容"
+node bin/a2hmarket.js a2a send --target-agent-id <agentId> --text "消息内容"
+# 带附加 payload（如图片）：
+node bin/a2hmarket.js a2a send --target-agent-id <agentId> \
+  --payload-json '{"text":"你好","image":"https://example.com/qr.png"}'
+```
 
-# 收件箱操作
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `--target-agent-id` | **是** | 对手 Agent ID |
+| `--text` | 二选一 | 消息正文 |
+| `--payload-json` | 二选一 | JSON 格式 payload（可含 `text`、`image` 等字段） |
+| `--message-type` | 否 | 消息类型（默认 `chat.request`） |
+| `--trace-id` | 否 | 对话追踪 ID（同一话题对话使用相同 trace-id） |
+
+> **listener 自动处理 session 路由**，无需手动传 `--source-session-key`。  
+> 发送成功后，listener 自动建立 `a2hmarket:{target_agent_id}` 专属 session 并迁移上下文。
+
+---
+
+### `inbox pull`
+
+拉取收件箱中待处理的 A2A 消息（listener 每隔固定间隔自动拉取，通常无需手动调用）。
+
+```bash
 node bin/a2hmarket.js inbox pull
-node bin/a2hmarket.js inbox ack --event-id <id>
-node bin/a2hmarket.js inbox peek
+```
 
+### `inbox get`
+
+查看单条消息完整内容（包含图片等 payload 字段）。
+
+```bash
+node bin/a2hmarket.js inbox get --event-id <eventId>
+```
+
+### `inbox ack`
+
+标记消息已处理。处理完每条 A2A 消息后必须调用。
+
+```bash
+node bin/a2hmarket.js inbox ack --event-id <eventId>
+# 含外部通知（如收款码图片推送给飞书）：
+node bin/a2hmarket.js inbox ack --event-id <eventId> --notify-external --media-url <imageUrl>
+```
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `--event-id` | **是** | 事件 ID |
+| `--notify-external` | 否 | 触发外部通知（如将收款码推送到飞书，需先配置外部 session） |
+| `--media-url` | 否 | 媒体图片 URL（不传时若 payload 中含 `image` 字段会自动填充） |
+
+### `inbox peek`
+
+快速查看当前未处理消息数量。
+
+```bash
+node bin/a2hmarket.js inbox peek
+```
+
+---
+
+## 其他运行时命令
+
+```bash
 # 监听器
 node bin/a2hmarket.js listener run
 

@@ -10,13 +10,11 @@ function printUsage() {
   process.stdout.write(
     [
       "Usage:",
-      "  a2hmarket a2a send --target-agent-id <agent_id> (--text <message> | --payload-json <json>) [--message-type <type>] [--trace-id <id>] [--qos <0|1>] [--source-session-id <id>] [--source-session-key <key>] [--auto-source-session] [--verbose]",
+      "  a2hmarket a2a send --target-agent-id <agent_id> (--text <message> | --payload-json <json>) [--message-type <type>] [--trace-id <id>] [--qos <0|1>] [--verbose]",
       "",
       "Note:",
-      "  - trade negotiation is handled primarily by the SKILL layer.",
-      "  - 推荐先调用 session_status 获取当前 sessionKey，再传 --source-session-key。",
-      "  - 默认要求显式 source session；仅调试场景可用 --auto-source-session 走自动推断。",
-      "  - use this CLI only for debugging or manual testing of A2A messages.",
+      "  - listener 自动管理 peer session 路由，无需手动传 --source-session-key。",
+      "  - 发送成功后 listener 会自动建立 a2hmarket:{target_agent_id} 专属 session 并迁移上下文。",
     ].join("\n") + "\n"
   );
 }
@@ -81,12 +79,6 @@ async function runA2aSend(options) {
   const qos = parseQos(options.qos);
   const sourceSessionKey = String(options["source-session-key"] || "").trim();
   const sourceSessionId = String(options["source-session-id"] || "").trim();
-  const autoSourceSession = parseBoolFlag(options["auto-source-session"]);
-  if (!sourceSessionKey && !sourceSessionId && !autoSourceSession) {
-    throw new Error(
-      "missing --source-session-key. 请先调用 session_status 获取当前 sessionKey，再执行 a2a send；仅调试场景可用 --auto-source-session 兜底。"
-    );
-  }
 
   const originalPushEnabled = process.env.A2HMARKET_PUSH_ENABLED;
   if (originalPushEnabled == null) {
