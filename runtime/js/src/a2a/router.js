@@ -1,7 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const { verifyEnvelope, verifyEnvelopeCore } = require("../protocol/a2a-protocol");
 const { toEventHash, sanitizePreview } = require("../listener/message-utils");
-const { peerSessionKey } = require("../gateway/peer-session-manager");
 
 function nowMs() {
   return Date.now();
@@ -70,14 +69,8 @@ function handleA2aMessage({ topic, payload, envelope: parsedEnvelope, store, cfg
     messageText: preview,
     messageId: envelope.message_id || null,
   });
-  const replyRoute =
-    store && typeof store.findA2aReplyRoute === "function"
-      ? store.findA2aReplyRoute({
-          peerId,
-          traceId: envelope.trace_id || null,
-        })
-      : null;
-
+  // 不再为每个对手创建专用 session，统一由 push-dispatcher 动态解析：
+  // 优先推送到 channel session（如飞书），其次回退到 main session。
   const inserted = store.insertIncomingEvent({
     event_id: eventIdFromEnvelope(),
     peer_id: peerId,
@@ -92,27 +85,21 @@ function handleA2aMessage({ topic, payload, envelope: parsedEnvelope, store, cfg
     a2a_message_id: envelope.message_id || null,
     push_enabled: cfg.pushEnabled,
     push_target: "openclaw",
-    target_session_id: replyRoute && replyRoute.sessionId ? replyRoute.sessionId : null,
-    // 有已记录的 reply route 优先用它；否则默认路由到该对手 agent 专属 session
-    target_session_key: replyRoute && replyRoute.sessionKey
-      ? replyRoute.sessionKey
-      : peerSessionKey(peerId),
+    target_session_id: null,
+    target_session_key: null,
   });
 
   if (!inserted.created) {
     return { accepted: false, reason: "duplicate_message_id" };
   }
-  const resolvedTargetSessionKey = replyRoute && replyRoute.sessionKey
-    ? replyRoute.sessionKey
-    : peerSessionKey(peerId);
 
   return {
     accepted: true,
     event_id: inserted.eventId,
     peer_id: peerId,
     message_id: envelope.message_id || null,
-    target_session_key: resolvedTargetSessionKey,
-    route_matched_by: replyRoute && replyRoute.matchedBy ? replyRoute.matchedBy : null,
+    target_session_key: null,
+    route_matched_by: null,
   };
 }
 

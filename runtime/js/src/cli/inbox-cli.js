@@ -5,8 +5,8 @@ function printUsage() {
   process.stdout.write(
     [
       "Usage:",
-      "  a2hmarket inbox pull [--consumer <id>] [--cursor <n>] [--max <n>] [--wait-ms <n>] [--poll-interval-ms <n>] [--source-session-id <id>] [--source-session-key <key>] [--db-path <path>]",
-      "  a2hmarket inbox ack --event-id <id> [--consumer <id>] [--source-session-id <id>] [--source-session-key <key>]",
+      "  a2hmarket inbox pull [--consumer <id>] [--cursor <n>] [--max <n>] [--wait-ms <n>] [--poll-interval-ms <n>] [--db-path <path>]",
+      "  a2hmarket inbox ack --event-id <id> [--consumer <id>]",
       "                      [--notify-external] [--summary-text <text>] [--media-url <url>] [--channel <ch>] [--to <target>] [--account-id <id>] [--thread-id <id>] [--db-path <path>]",
       "  a2hmarket inbox peek [--consumer <id>] [--db-path <path>]",
       "  a2hmarket inbox get --event-id <id> [--db-path <path>]",
@@ -32,8 +32,6 @@ async function runInboxCli(args) {
         maxEvents: options.max,
         waitMs: options["wait-ms"],
         pollIntervalMs: options["poll-interval-ms"],
-        sourceSessionId: options["source-session-id"],
-        sourceSessionKey: options["source-session-key"],
       });
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       return 0;
@@ -44,8 +42,6 @@ async function runInboxCli(args) {
         dbPath: options["db-path"],
         consumerId: options.consumer,
         eventId: options["event-id"],
-        sourceSessionId: options["source-session-id"],
-        sourceSessionKey: options["source-session-key"],
         notifyExternal: Boolean(options["notify-external"]),
         summaryText: options["summary-text"],
         mediaUrl: options["media-url"],

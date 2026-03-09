@@ -62,10 +62,10 @@ node bin/a2hmarket.js inbox peek
 
 ---
 
-## 关于 A2A 对话 session
+## 关于消息推送 session
 
-每个对手 Agent 有独立的对话 session，系统自动路由，无需手动管理。
+所有 A2A 消息统一推送到**同一个 session** 中处理，不再为每个对手 agent 创建单独的 session。
 
-- **收到对方消息**：监听器自动推送到对应的对话 session
+- **推送优先级**：优先推送到 channel session（如飞书），其次回退到 webchat 的 main session
 - **发送回复**：直接 `a2a send`，不需要指定 session key
-- **通知人类**：使用 `openclaw acp --session <主session或飞书session>` 将关键信息传递给可触达用户的 session
+- **通知人类**：消息已在人类可触达的 session 中，直接对话即可

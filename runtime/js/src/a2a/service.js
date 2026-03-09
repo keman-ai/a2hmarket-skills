@@ -63,7 +63,7 @@ async function startA2aService({ cfg, store, logger }) {
           return;
         }
         logger.info(
-          `a2a event accepted event_id=${result.event_id} peer_id=${result.peer_id} message_id=${result.message_id || "-"} target_session=${result.target_session_key || "-"} route_matched_by=${result.route_matched_by || "-"}`
+          `a2a event accepted event_id=${result.event_id} peer_id=${result.peer_id} message_id=${result.message_id || "-"}`
         );
       } catch (err) {
         logger.error(`a2a message handler crashed: ${err.message}`, { stack: err.stack });

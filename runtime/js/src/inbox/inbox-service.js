@@ -3,45 +3,12 @@ const { resolveDbPath, DEFAULT_PID_PATH } = require("../config/paths");
 const { EventStore, nowMs } = require("../store/event-store");
 const { parseDeliveryHintsFromSessionKey } = require("../config/openclaw-routing");
 
-/**
- * 在外部摘要通知末尾追加路由回执块，使接收端（如飞书 session AI）知道
- * 将人类决策通过 chat.send 路由回正确的 peer session。
- *
- * 只有当 sourceSessionKey 是 a2hmarket peer session（以 agent:main:a2hmarket: 开头）时追加，
- * 避免 main session 自引用。
- */
-function appendReplyRoute(summaryText, sourceSessionKey, eventId) {
-  const PEER_PREFIX = "agent:main:a2hmarket:";
-  if (!sourceSessionKey || !sourceSessionKey.startsWith(PEER_PREFIX)) {
-    return summaryText;
-  }
-  const body = String(summaryText || "").trimEnd();
-  const routeBlock = [
-    "",
-    "---",
-    "【a2hmarket 回复路由】",
-    `source_session_key: ${sourceSessionKey}`,
-    `event_id: ${eventId || "-"}`,
-    "收到人类决策后，请将决策转发回 peer session（选一种方式）：",
-    `  方式一（推荐）：openclaw acp --session "${sourceSessionKey}"`,
-    `    然后在交互中输入决策内容`,
-    `  方式二（单次）：向 peer session 发送 chat.send 消息`,
-  ].join("\n");
-  return body + routeBlock;
-}
-
 function coerceInt(value, fallback, min, max) {
   const n = Number.parseInt(String(value), 10);
   let out = Number.isFinite(n) ? n : fallback;
   if (Number.isFinite(min)) out = Math.max(min, out);
   if (Number.isFinite(max)) out = Math.min(max, out);
   return out;
-}
-
-function eventBindingTs(event) {
-  const msgTs = coerceInt(event && event.msg_ts, 0);
-  if (msgTs > 0) return msgTs;
-  return coerceInt(event && event.created_at, 0);
 }
 
 async function pull({
@@ -51,8 +18,6 @@ async function pull({
   maxEvents,
   waitMs,
   pollIntervalMs,
-  sourceSessionId,
-  sourceSessionKey,
 }) {
   const store = new EventStore(resolveDbPath(dbPath)).open();
   try {
@@ -61,14 +26,6 @@ async function pull({
     const normalizedLimit = coerceInt(maxEvents, 20, 1, 200);
     const normalizedWait = coerceInt(waitMs, 0, 0, 300000);
     const normalizedPollInterval = coerceInt(pollIntervalMs, 300, 50, 10000);
-    const normalizedSourceSessionId = String(sourceSessionId || "").trim();
-    const normalizedSourceSessionKey = String(sourceSessionKey || "").trim();
-    if (
-      normalizedConsumer === "openclaw" &&
-      !normalizedSourceSessionKey
-    ) {
-      throw new Error("source_session_key is required for openclaw inbox pull");
-    }
     const deadline = nowMs() + normalizedWait;
 
     while (true) {
@@ -79,40 +36,11 @@ async function pull({
       });
 
       if (events.length > 0) {
-        let routeBoundCount = 0;
-        if (
-          normalizedConsumer === "openclaw" &&
-          (normalizedSourceSessionId || normalizedSourceSessionKey)
-        ) {
-          const peerBindings = new Map();
-          for (const event of events) {
-            const peerId = String(event.peer_id || "").trim();
-            if (!peerId) continue;
-            const bindingTs = eventBindingTs(event);
-            const current = peerBindings.get(peerId) || 0;
-            if (bindingTs > current) {
-              peerBindings.set(peerId, bindingTs);
-            }
-          }
-          for (const [peerId, bindingTs] of peerBindings.entries()) {
-            const bound = store.bindPeerSession({
-              peerId,
-              sessionId: normalizedSourceSessionId,
-              sessionKey: normalizedSourceSessionKey,
-              source: "inbox-pull",
-              updatedAt: bindingTs,
-            });
-            if (bound.updated === true) {
-              routeBoundCount += 1;
-            }
-          }
-        }
         return {
           ok: true,
           consumer_id: normalizedConsumer,
           cursor: events[events.length - 1].seq,
           events,
-          route_bound_count: routeBoundCount,
         };
       }
 
@@ -122,7 +50,6 @@ async function pull({
           consumer_id: normalizedConsumer,
           cursor: normalizedCursor,
           events: [],
-          route_bound_count: 0,
         };
       }
 
@@ -179,39 +106,13 @@ async function ack({
     if (!normalizedEventId) {
       throw new Error("event_id is required");
     }
-    if (
-      normalizedConsumer === "openclaw" &&
-      !normalizedSourceSessionKey
-    ) {
-      throw new Error("source_session_key is required for openclaw inbox ack");
-    }
 
     const ackResult = store.ackEvent({
       consumerId: normalizedConsumer,
       eventId: normalizedEventId,
-      routeBinding:
-        normalizedConsumer === "openclaw" &&
-        (normalizedSourceSessionId || normalizedSourceSessionKey)
-          ? {
-              sessionId: normalizedSourceSessionId,
-              sessionKey: normalizedSourceSessionKey,
-              source: "inbox-ack",
-            }
-          : null,
+      routeBinding: null,
     });
     const ackedAt = ackResult.ackedAt;
-    let routeBindReason = "";
-    if (ackResult.routeBound !== true) {
-      if (ackResult.inserted !== true) {
-        routeBindReason = "already_acked";
-      } else if (!normalizedSourceSessionId && !normalizedSourceSessionKey) {
-        routeBindReason = "missing_session_ref";
-      } else if (normalizedConsumer !== "openclaw") {
-        routeBindReason = "non_authoritative_consumer";
-      } else {
-        routeBindReason = ackResult.routeBindReason || "";
-      }
-    }
 
     // Enqueue external summary notification on first ACK only.
     let summaryEnqueued = false;
@@ -228,12 +129,6 @@ async function ack({
         }
       }
       if (resolvedChannel && resolvedTo) {
-        // 自动在消息文末追加路由回执块，使飞书 session AI 知道将人类决策路由回哪个 peer session
-        const messageTextWithRoute = appendReplyRoute(
-          normalizedSummaryText,
-          normalizedSourceSessionKey,
-          normalizedEventId
-        );
         const enqueueResult = store.enqueueMediaOutbox({
           eventId: normalizedEventId,
           sessionKey: normalizedSourceSessionKey || null,
@@ -241,7 +136,7 @@ async function ack({
           to: resolvedTo,
           accountId: normalizedAccountId || null,
           threadId: normalizedThreadId || null,
-          messageText: messageTextWithRoute,
+          messageText: normalizedSummaryText,
           mediaUrl: normalizedMediaUrl || null,
         });
         summaryEnqueued = enqueueResult.inserted === true;
@@ -262,8 +157,6 @@ async function ack({
       consumer_id: normalizedConsumer,
       event_id: normalizedEventId,
       acked_at: ackedAt,
-      route_bound: ackResult.routeBound === true,
-      route_bind_reason: routeBindReason,
       summary_enqueued: summaryEnqueued,
       summary_skip_reason: summarySkipReason || undefined,
       media_url_auto_filled: !String(mediaUrl || "").trim() && Boolean(normalizedMediaUrl),

@@ -9,6 +9,9 @@ runtime/store/*.lock
 runtime/store/*.pid
 runtime/logs/
 
+docs/
+tests/
+
 # OS
 Thumbs.db
 *.swp

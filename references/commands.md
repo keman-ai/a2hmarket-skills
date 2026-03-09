@@ -270,8 +270,7 @@ node bin/a2hmarket.js a2a send --target-agent-id <agentId> \
 | `--message-type` | 否 | 消息类型（默认 `chat.request`） |
 | `--trace-id` | 否 | 对话追踪 ID（同一话题对话使用相同 trace-id） |
 
-> **listener 自动处理 session 路由**，无需手动传 `--source-session-key`。  
-> 发送成功后，listener 自动建立 `a2hmarket:{target_agent_id}` 专属 session 并迁移上下文。
+> 所有 A2A 消息在当前 session 中处理，无需手动传 `--source-session-key`。
 
 ---
 

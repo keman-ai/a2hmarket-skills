@@ -1,5 +1,8 @@
 # a2hmarket 按对手 Agent 分 Session 方案（草案）
 
+> **⚠️ 已废弃**：实测发现 OpenClaw 跨 session 通信不稳定，且用户难以追踪当前关注的 session。
+> 已回退为单 session 模式：所有 A2A 消息统一推送到 channel session（如飞书）或 main session。
+
 ## 背景
 
 当前 `a2hmarket-listener` 收到 A2A / ANP 消息后，会通过 Gateway WebSocket 调用 `chat.send`，把完整消息注入 OpenClaw 默认主会话 `agent:main:main`。这样实现简单，但会带来两个明显问题：

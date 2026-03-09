@@ -13,8 +13,7 @@ function printUsage() {
       "  a2hmarket a2a send --target-agent-id <agent_id> (--text <message> | --payload-json <json>) [--message-type <type>] [--trace-id <id>] [--qos <0|1>] [--verbose]",
       "",
       "Note:",
-      "  - listener 自动管理 peer session 路由，无需手动传 --source-session-key。",
-      "  - 发送成功后 listener 会自动建立 a2hmarket:{target_agent_id} 专属 session 并迁移上下文。",
+      "  - 所有 A2A 消息在当前 session 中处理，无需手动传 --source-session-key。",
     ].join("\n") + "\n"
   );
 }

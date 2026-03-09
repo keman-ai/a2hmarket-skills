@@ -2,7 +2,6 @@ const { nowMs } = require("../store/event-store");
 const { MAIN_SESSION_KEY, resolvePushSession } = require("../config/openclaw-routing");
 const { formatSystemEventText, coerceInt } = require("./message-utils");
 const { scrubSessionRefs } = require("../utils/session-ref");
-const { PEER_SESSION_PREFIX } = require("../gateway/peer-session-manager");
 
 function calculateBackoffMs(attempt, maxDelayMs) {
   const normalizedAttempt = Math.max(1, Math.min(10, coerceInt(attempt, 1)));
@@ -16,25 +15,11 @@ async function runGatewayPush(gatewayClient, text, options) {
     sessionKey: MAIN_SESSION_KEY,
     source: "fallback",
   };
-  const peerSessionManager = options && options.peerSessionManager;
   const started = nowMs();
 
   try {
     const sessionKey = resolved.sessionKey || MAIN_SESSION_KEY;
-
-    // 若目标是 peer 专属 session（非 main），先确保它已自举
-    if (
-      peerSessionManager &&
-      sessionKey !== MAIN_SESSION_KEY &&
-      sessionKey.startsWith(PEER_SESSION_PREFIX)
-    ) {
-      await peerSessionManager.ensureSession(sessionKey);
-    }
-
     await gatewayClient.chatSend({ sessionKey, message: text });
-    // 注：若目标是 feishu/外部 session，可通过 sourceSessionKey 告知 Gateway 回复路由
-    // 当前 push_outbox 路径是 peer → feishu（通知方向），无需 sourceSessionKey
-    // sourceSessionKey 用于反向：从 feishu session 通知时携带 peer session key
     const elapsed = nowMs() - started;
     return { ok: true, detail: `elapsed_ms=${elapsed} gateway chat.send ok session=${scrubSessionRefs(sessionKey)}` };
   } catch (err) {
@@ -59,10 +44,9 @@ async function flushPushOutbox(store, cfg, logger, options) {
   }
   const nowFn = options && typeof options.now === "function" ? options.now : nowMs;
   const gatewayClient = options && options.gatewayClient;
-  const peerSessionManager = options && options.peerSessionManager;
   const pushFn = options && typeof options.push === "function"
     ? options.push
-    : (_, text, opts) => runGatewayPush(gatewayClient, text, { ...opts, peerSessionManager });
+    : (_, text, opts) => runGatewayPush(gatewayClient, text, opts);
 
   const tsNow = nowFn();
 
@@ -137,6 +121,7 @@ async function flushPushOutbox(store, cfg, logger, options) {
     }
 
     const text = formatSystemEventText(row);
+    const sessionMaxAgeMs = coerceInt(cfg.pushSessionMaxAgeMs, 60 * 60 * 1000); // 默认 60 min
     const resolvedSession = resolvePushSession({
       sessions: listed.sessions,
       targetSessionId: row.target_session_id,
@@ -144,7 +129,7 @@ async function flushPushOutbox(store, cfg, logger, options) {
       fallbackSessionId: cfg.openclawSessionId,
       fallbackSessionKey: MAIN_SESSION_KEY,
       nowMs: tsNow,
-      maxAgeMs: 10 * 60 * 1000,
+      maxAgeMs: sessionMaxAgeMs,
     });
     const result = await pushFn(cfg, text, { resolvedSession });
     if (result.ok) {
