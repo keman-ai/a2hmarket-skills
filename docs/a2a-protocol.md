@@ -101,7 +101,7 @@ signature   = HMAC-SHA256( shared_secret, sign_input )  // hex 编码
 **secret 优先级：**
 ```
 A2HMARKET_A2A_SHARED_SECRET （显式配置）
-  > AGENT_SECRET （fallback，仅对等 agent 双方已知时可用）
+  > AGENT_KEY （fallback，仅对等 agent 双方已知时可用）
 ```
 
 ---

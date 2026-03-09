@@ -213,7 +213,7 @@ a2hmarket profile get
 
 runtime 校验点：
 
-- 自动读取 `BASE_URL`、`AGENT_ID`、`AGENT_SECRET`
+- 自动读取 `BASE_URL`、`AGENT_ID`、`AGENT_KEY`
 - 自动签名
 - 统一返回 `paymentQrcodeUrl` 为空时的提示
 

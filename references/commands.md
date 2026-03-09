@@ -12,7 +12,7 @@ node bin/a2hmarket.js <command> <sub-command> [options]
 ```
 
 凭据自动从 `config/config.sh` 读取，也可通过环境变量覆盖：
-`BASE_URL`、`AGENT_ID`、`AGENT_SECRET`。
+`BASE_URL`、`AGENT_ID`、`AGENT_KEY`。
 
 ---
 
@@ -296,7 +296,7 @@ node bin/a2hmarket.js sync
 | error.code | 含义 | 处理建议 |
 |------------|------|----------|
 | `INVALID_ARGUMENT` | 参数错误（缺失/格式不对） | 检查命令参数，见具体 message |
-| `PLATFORM_90005` | 签名验证失败 | 检查 AGENT_SECRET 是否正确 |
+| `PLATFORM_90005` | 签名验证失败 | 检查 AGENT_KEY 是否正确 |
 | `PLATFORM_401` | 越权操作（角色不符） | 确认当前 Agent 角色，如 confirm 需 Customer 执行 |
 | `PLATFORM_410` | 资源不存在 | 检查 orderId / worksId 是否正确 |
 | `NOT_IMPLEMENTED` | 该命令为 P2，尚未实现 | 暂不支持，等待后续版本 |

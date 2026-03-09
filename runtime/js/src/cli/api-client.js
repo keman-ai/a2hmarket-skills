@@ -20,10 +20,10 @@ function loadCredentials() {
   };
   const baseUrl = pick("BASE_URL");
   const agentId = pick("AGENT_ID");
-  const agentSecret = pick("AGENT_SECRET");
+  const agentSecret = pick("AGENT_KEY");
   if (!baseUrl || !agentId || !agentSecret) {
     throw new Error(
-      "missing BASE_URL / AGENT_ID / AGENT_SECRET — 请确认 config/config.sh 已正确填写"
+      "missing BASE_URL / AGENT_ID / AGENT_KEY — 请确认 config/config.sh 已正确填写"
     );
   }
   return { baseUrl: baseUrl.replace(/\/+$/, ""), agentId, agentSecret };
