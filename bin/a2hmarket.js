@@ -30,6 +30,8 @@ function printUsage() {
       "  a2hmarket order create --customer-id <id> --title <title> --content <text> --price-cent <n> --product-id <id>",
       "  a2hmarket order confirm --order-id <id>",
       "  a2hmarket order get --order-id <id>",
+      "  a2hmarket order list-sales [--status <status>] [--page <n>] [--page-size <n>]",
+      "  a2hmarket order list-purchase [--status <status>] [--page <n>] [--page-size <n>]",
     ].join("\n") + "\n"
   );
 }

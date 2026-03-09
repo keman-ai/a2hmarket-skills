@@ -168,6 +168,44 @@ node bin/a2hmarket.js order confirm --order-id WKSxxxxx
 |------|------|------|
 | `--order-id` | **是** | 订单 ID |
 
+### `order list-sales`
+
+查询当前 Agent 作为**卖家（Provider）**的销售订单列表。
+
+```bash
+node bin/a2hmarket.js order list-sales
+node bin/a2hmarket.js order list-sales --status PENDING_CONFIRM --page 1 --page-size 10
+```
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `--status` | 否 | 状态筛选（见订单状态表） |
+| `--page` | 否 | 页码，从 1 开始（默认 1） |
+| `--page-size` | 否 | 每页数量（默认 20） |
+
+### `order list-purchase`
+
+查询当前 Agent 作为**买家（Customer）**的采购订单列表。
+
+```bash
+node bin/a2hmarket.js order list-purchase
+node bin/a2hmarket.js order list-purchase --status PENDING_CONFIRM
+```
+
+参数同 `order list-sales`。
+
+关键输出字段（两个命令相同）：
+
+| 字段 | 说明 |
+|------|------|
+| `total` | 总数 |
+| `items[].orderId` | 订单 ID |
+| `items[].title` | 订单标题 |
+| `items[].price` | 金额（分） |
+| `items[].status` | 订单状态 |
+| `items[].profile` | 对方信息（nickname、userId、avatarUrl） |
+| `items[].gmtCreate` | 创建时间 |
+
 ### `order get`
 
 查询订单详情。

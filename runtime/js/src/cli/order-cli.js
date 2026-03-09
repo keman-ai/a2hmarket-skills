@@ -8,8 +8,11 @@ function printUsage() {
       "  a2hmarket order create --customer-id <id> --title <title> --content <text> --price-cent <n> --product-id <id>",
       "  a2hmarket order confirm --order-id <id>",
       "  a2hmarket order get --order-id <id>",
+      "  a2hmarket order list-sales [--status <status>] [--page <n>] [--page-size <n>]",
+      "  a2hmarket order list-purchase [--status <status>] [--page <n>] [--page-size <n>]",
       "",
       "  price-cent: 以分为单位的正整数，例如 10000 = 100元",
+      "  status: PENDING_CONFIRM | CONFIRMED | COMPLETED | REJECTED | CANCELLED",
     ].join("\n") + "\n"
   );
 }
@@ -119,6 +122,47 @@ async function cmdGet(creds, opts) {
 }
 
 // -------------------------------------------------------------------------
+// order list-sales / list-purchase
+// -------------------------------------------------------------------------
+
+function formatOrderItem(raw) {
+  return {
+    orderId: raw.orderId || null,
+    title: raw.title || null,
+    price: raw.price ?? null,
+    status: raw.status || null,
+    providerId: raw.providerId || null,
+    customerId: raw.customerId || null,
+    currentType: raw.currentType ?? null,
+    profile: raw.profile
+      ? { nickname: raw.profile.nickname, userId: raw.profile.userId, avatarUrl: raw.profile.avatarUrl || "" }
+      : null,
+    gmtCreate: raw.gmtCreate || null,
+  };
+}
+
+async function cmdListOrders(action, creds, opts, apiPath) {
+  const page = Number(opts["page"] || 1);
+  const pageSize = Number(opts["page-size"] || 20);
+  const status = opts["status"] ? String(opts["status"]) : null;
+
+  const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (status) qs.set("status", status);
+
+  const fullPath = `${apiPath}?${qs.toString()}`;
+  const raw = await fetchJson({ creds, apiPath: fullPath, signPath: apiPath });
+
+  const items = Array.isArray(raw.list) ? raw.list.map(formatOrderItem) : [];
+  outputOk(action, {
+    total: raw.total ?? null,
+    page: raw.page ?? page,
+    pageSize: raw.pageSize ?? pageSize,
+    items,
+  });
+  return 0;
+}
+
+// -------------------------------------------------------------------------
 // 路由入口
 // -------------------------------------------------------------------------
 
@@ -136,9 +180,17 @@ async function runOrderCli(args) {
     if (sub === "create") return await cmdCreate(creds, opts);
     if (sub === "confirm") return await cmdConfirm(creds, opts);
     if (sub === "get") return await cmdGet(creds, opts);
+    if (sub === "list-sales") {
+      return await cmdListOrders("order.list-sales", creds, opts,
+        "/findu-trade/api/v1/orders/sales-orders");
+    }
+    if (sub === "list-purchase") {
+      return await cmdListOrders("order.list-purchase", creds, opts,
+        "/findu-trade/api/v1/orders/purchase-orders");
+    }
 
     // P2 stubs
-    const p2cmds = ["reject", "cancel", "list-sales", "list-purchase", "review-create", "review-list"];
+    const p2cmds = ["reject", "cancel", "review-create", "review-list"];
     if (p2cmds.includes(sub)) {
       outputError(`order.${sub}`, {
         message: `order ${sub} 为 P2 功能，尚未实现。`,
