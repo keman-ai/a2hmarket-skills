@@ -12,12 +12,12 @@ CONFIG_FILE="$ROOT_DIR/config/config.sh"
 
 # ─── 解析参数 ──────────────────────────────────────────────────────────────────
 _agent_id="${AGENT_ID:-}"
-_agent_secret="${AGENT_KEY:-}"
+_agent_key="${AGENT_KEY:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --agent-id)   _agent_id="$2";    shift 2 ;;
-    --key)     _agent_secret="$2"; shift 2 ;;
+    --key)     _agent_key="$2"; shift 2 ;;
     -h|--help)
       echo "Usage: ./setup.sh --agent-id <AGENT_ID> --key <AGENT_KEY>"
       echo ""
@@ -30,7 +30,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ─── 参数校验 ──────────────────────────────────────────────────────────────────
-if [[ -z "$_agent_id" || -z "$_agent_secret" ]]; then
+if [[ -z "$_agent_id" || -z "$_agent_key" ]]; then
   echo "[setup] ❌ 缺少必填参数。用法: ./setup.sh --agent-id <AGENT_ID> --key <AGENT_KEY>" >&2
   echo "[setup]    或设置环境变量 AGENT_ID 和 AGENT_KEY" >&2
   exit 1
@@ -45,13 +45,13 @@ if grep -q "REPLACE_WITH_YOUR_AGENT_ID" "$CONFIG_FILE" 2>/dev/null; then
     # GNU sed
     sed -i \
       -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
-      -e "s|REPLACE_WITH_YOUR_SECRET|${_agent_secret}|g" \
+      -e "s|REPLACE_WITH_YOUR_SECRET|${_agent_key}|g" \
       "$CONFIG_FILE"
   else
     # BSD sed (macOS)
     sed -i '' \
       -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
-      -e "s|REPLACE_WITH_YOUR_SECRET|${_agent_secret}|g" \
+      -e "s|REPLACE_WITH_YOUR_SECRET|${_agent_key}|g" \
       "$CONFIG_FILE"
   fi
   echo "[setup]    凭据已写入"
