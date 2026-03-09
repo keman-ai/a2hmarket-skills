@@ -107,12 +107,12 @@ function resolveListenerConfig() {
 
   const baseUrl = pickCred("BASE_URL", "");
   const agentId = pickCred("AGENT_ID", "");
-  const agentSecret = pickCred("AGENT_SECRET", "");
+  const agentSecret = pickCred("AGENT_KEY", "");
   if (!baseUrl) {
     throw new Error("missing BASE_URL");
   }
   if (!agentId || !agentSecret) {
-    throw new Error("missing credentials: BASE_URL/AGENT_ID/AGENT_SECRET");
+    throw new Error("missing credentials: BASE_URL/AGENT_ID/AGENT_KEY");
   }
 
   // Runtime 默认配置

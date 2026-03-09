@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # a2hmarket skill 一键 setup 脚本
-# 用法: ./setup.sh --agent-id <AGENT_ID> --secret <AGENT_SECRET>
-# 也可通过环境变量传入: AGENT_ID=... AGENT_SECRET=... ./setup.sh
+# 用法: ./setup.sh --agent-id <AGENT_ID> --key <AGENT_KEY>
+# 也可通过环境变量传入: AGENT_ID=... AGENT_KEY=... ./setup.sh
 #
 # 幂等：可重复运行，不会覆盖已配置的凭据，不会重复启动 listener。
 
@@ -12,17 +12,17 @@ CONFIG_FILE="$ROOT_DIR/config/config.sh"
 
 # ─── 解析参数 ──────────────────────────────────────────────────────────────────
 _agent_id="${AGENT_ID:-}"
-_agent_secret="${AGENT_SECRET:-}"
+_agent_key="${AGENT_KEY:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --agent-id)   _agent_id="$2";    shift 2 ;;
-    --secret)     _agent_secret="$2"; shift 2 ;;
+    --key)     _agent_key="$2"; shift 2 ;;
     -h|--help)
-      echo "Usage: ./setup.sh --agent-id <AGENT_ID> --secret <AGENT_SECRET>"
+      echo "Usage: ./setup.sh --agent-id <AGENT_ID> --key <AGENT_KEY>"
       echo ""
       echo "也可通过环境变量传入:"
-      echo "  AGENT_ID=ag_xxx AGENT_SECRET=secret_xxx ./setup.sh"
+      echo "  AGENT_ID=ag_xxx AGENT_KEY=secret_xxx ./setup.sh"
       exit 0
       ;;
     *) echo "[setup] 未知参数: $1" >&2; exit 1 ;;
@@ -30,9 +30,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ─── 参数校验 ──────────────────────────────────────────────────────────────────
-if [[ -z "$_agent_id" || -z "$_agent_secret" ]]; then
-  echo "[setup] ❌ 缺少必填参数。用法: ./setup.sh --agent-id <AGENT_ID> --secret <AGENT_SECRET>" >&2
-  echo "[setup]    或设置环境变量 AGENT_ID 和 AGENT_SECRET" >&2
+if [[ -z "$_agent_id" || -z "$_agent_key" ]]; then
+  echo "[setup] ❌ 缺少必填参数。用法: ./setup.sh --agent-id <AGENT_ID> --key <AGENT_KEY>" >&2
+  echo "[setup]    或设置环境变量 AGENT_ID 和 AGENT_KEY" >&2
   exit 1
 fi
 
@@ -45,13 +45,13 @@ if grep -q "REPLACE_WITH_YOUR_AGENT_ID" "$CONFIG_FILE" 2>/dev/null; then
     # GNU sed
     sed -i \
       -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
-      -e "s|REPLACE_WITH_YOUR_SECRET|${_agent_secret}|g" \
+      -e "s|REPLACE_WITH_YOUR_KEY|${_agent_key}|g" \
       "$CONFIG_FILE"
   else
     # BSD sed (macOS)
     sed -i '' \
       -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
-      -e "s|REPLACE_WITH_YOUR_SECRET|${_agent_secret}|g" \
+      -e "s|REPLACE_WITH_YOUR_KEY|${_agent_key}|g" \
       "$CONFIG_FILE"
   fi
   echo "[setup]    凭据已写入"

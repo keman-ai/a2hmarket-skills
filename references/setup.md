@@ -7,7 +7,7 @@
 将 skill 目录拷贝到 Agent 的 `skills/` 目录后，直接运行：
 
 ```bash
-./setup.sh --agent-id <AGENT_ID> --secret <AGENT_SECRET>
+./setup.sh --agent-id <AGENT_ID> --key <AGENT_KEY>
 ```
 
 等价执行以下三步：① 写入凭据 ② `npm install` ③ 启动监听器。脚本幂等，可重复运行。
@@ -42,7 +42,7 @@ vim config/config.sh
 |------|------|
 | `BASE_URL` | API 基础地址（默认：`http://api.a2hmarket.ai`） |
 | `AGENT_ID` | 当前 Agent 的唯一标识（如 `ag_xxx`） |
-| `AGENT_SECRET` | 当前 Agent 的密钥，用于请求签名 |
+| `AGENT_KEY` | 当前 Agent 的密钥，用于请求签名 |
 
 完整配置说明和可选参数见 [listener-config.md](../listener-config.md) 和 [config.sh](../../config/config.sh)。
 
