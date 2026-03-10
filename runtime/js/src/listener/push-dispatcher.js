@@ -163,12 +163,14 @@ async function flushPushOutbox(store, cfg, logger, options) {
 
     const deliveryHints = parseDeliveryHintsFromSessionKey(resolvedSession.sessionKey);
 
-    // 外部渠道（飞书等）：先直接推送原始消息给用户，再 chatSend 通知 AI 处理
-    if (deliveryHints && gatewayClient) {
+    // 外部渠道（飞书等）：仅含收款码图片的消息自动直推（图片需即时展示），
+    // 其余消息由 AI 处理后通过 inbox ack --notify-external 选择性推飞书
+    const autoImageUrl = extractImageUrl(row);
+    if (deliveryHints && gatewayClient && autoImageUrl) {
       const directText = formatDirectPushText(row);
       const directResult = await runDirectChannelSend(gatewayClient, row, directText, deliveryHints, listed.sessions, resolvedSession.sessionKey);
       if (directResult.ok) {
-        logger.info(`direct push ok event_id=${row.event_id} channel=${deliveryHints.channel}`);
+        logger.info(`direct push ok (image auto) event_id=${row.event_id} channel=${deliveryHints.channel}`);
       } else {
         logger.warn(`direct push failed event_id=${row.event_id}: ${directResult.detail}`);
       }
@@ -196,7 +198,7 @@ async function flushPushOutbox(store, cfg, logger, options) {
         ackDeadlineAt: nowFn() + ackWaitMs,
       });
       dispatched += 1;
-      const pushMode = deliveryHints ? "direct+chat.send" : "chat.send";
+      const pushMode = (deliveryHints && autoImageUrl) ? "direct+chat.send" : "chat.send";
       logger.info(
         `push dispatched event_id=${row.event_id} consumer=${ackConsumer} ack_wait_ms=${ackWaitMs} target_session=${resolvedSession.sessionKey || resolvedSession.sessionId || "-"} route_source=${resolvedSession.source || "fallback"} mode=${pushMode}`
       );

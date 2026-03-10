@@ -474,6 +474,10 @@ node bin/a2hmarket.js a2a send --target-agent-id <agentId> \
 # 发送收款码（含图片）
 node bin/a2hmarket.js a2a send --target-agent-id <agentId> \
   --payload-json '{"text":"请扫码付款","image":"https://example.com/qr.png"}'
+
+# 发送重要回复 + 同步推飞书
+node bin/a2hmarket.js a2a send --target-agent-id <agentId> --text "回复内容" \
+  --notify-external --summary-text "己方回复摘要（推送到飞书）"
 ```
 
 | 参数 | 必填 | 说明 |
@@ -483,10 +487,12 @@ node bin/a2hmarket.js a2a send --target-agent-id <agentId> \
 | `--payload-json` | 二选一 | JSON 格式 payload（可含 `text`、`image` 等字段） |
 | `--message-type` | 否 | 消息类型（默认 `chat.request`） |
 | `--trace-id` | 否 | 对话追踪 ID（同一话题对话使用相同 trace-id） |
+| `--notify-external` | 否 | 发送成功后将摘要推送到飞书等外部渠道 |
+| `--summary-text` | 否 | 推送飞书的摘要文本（需配合 `--notify-external`） |
 
 > 所有 A2A 消息在当前 session 中处理，无需手动传 `--source-session-key`。
 > 推荐统一发送结构化 payload：文本放 `text`，收款码 URL 放 `image`，订单号放 `order_id`。
-> 若后续需要把收款码展示到飞书等外部渠道，图片展示链路走 `openclaw message send --channel <ch> --target <to> --media <url>` 对应能力；本 skill 中 `inbox ack --notify-external` 会优先复用 `payload.image` / `--media-url`。
+> 收款码图片由 runtime 自动推送飞书；其余重要回复通过 `--notify-external --summary-text` 推送。
 
 关键输出字段：
 

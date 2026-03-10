@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 const { EventStore } = require("../store/event-store");
-const { MAIN_SESSION_KEY } = require("../config/openclaw-routing");
+const { MAIN_SESSION_KEY, parseDeliveryHintsFromSessionKey } = require("../config/openclaw-routing");
 
 function isProcessRunning(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -83,6 +83,8 @@ function enqueueOutboundEnvelope({
   envelope,
   sourceSessionId,
   sourceSessionKey,
+  notifyExternal,
+  summaryText,
 }) {
   const store = new EventStore(cfg.dbPath).open();
   try {
@@ -106,6 +108,37 @@ function enqueueOutboundEnvelope({
       source_session_id: sourceSession.sessionId || null,
       source_session_key: sourceSession.sessionKey || null,
     });
+
+    let notifyEnqueued = false;
+    let notifySkipReason = "";
+    const normalizedSummary = String(summaryText || "").trim();
+    if (notifyExternal && normalizedSummary && result.created) {
+      const sessionKey = sourceSession.sessionKey || "";
+      const hints = parseDeliveryHintsFromSessionKey(sessionKey);
+      if (hints) {
+        const mediaEnqueue = store.enqueueMediaOutbox({
+          eventId: `outbound_${messageId}`,
+          sessionKey: sessionKey || null,
+          channel: hints.channel,
+          to: hints.to,
+          accountId: null,
+          threadId: null,
+          messageText: normalizedSummary,
+          mediaUrl: null,
+        });
+        notifyEnqueued = mediaEnqueue.inserted === true;
+        if (!notifyEnqueued) {
+          notifySkipReason = mediaEnqueue.reason || "unknown";
+        }
+      } else {
+        notifySkipReason = "no_delivery_target";
+      }
+    } else if (notifyExternal && !normalizedSummary) {
+      notifySkipReason = "no_summary_text";
+    } else if (notifyExternal && !result.created) {
+      notifySkipReason = "duplicate_message";
+    }
+
     return {
       ...result,
       source_session_id: sourceSession.sessionId || "",
@@ -113,6 +146,8 @@ function enqueueOutboundEnvelope({
       source_session_source: sourceSession.source || "",
       source_session_lookup_ok: sourceSession.lookupOk !== false,
       source_session_lookup_detail: sourceSession.lookupDetail || "",
+      notify_enqueued: notifyEnqueued,
+      notify_skip_reason: notifySkipReason || undefined,
     };
   } finally {
     store.close();

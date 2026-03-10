@@ -10,10 +10,14 @@ function printUsage() {
   process.stdout.write(
     [
       "Usage:",
-      "  a2hmarket a2a send --target-agent-id <agent_id> (--text <message> | --payload-json <json>) [--message-type <type>] [--trace-id <id>] [--qos <0|1>] [--verbose]",
+      "  a2hmarket a2a send --target-agent-id <agent_id> (--text <message> | --payload-json <json>)",
+      "    [--message-type <type>] [--trace-id <id>] [--qos <0|1>]",
+      "    [--notify-external --summary-text <text>]",
+      "    [--verbose]",
       "",
       "Note:",
       "  - 所有 A2A 消息在当前 session 中处理，无需手动传 --source-session-key。",
+      "  - --notify-external + --summary-text: 发送成功后同时将摘要推送到飞书等外部渠道。",
     ].join("\n") + "\n"
   );
 }
@@ -78,6 +82,8 @@ async function runA2aSend(options) {
   const qos = parseQos(options.qos);
   const sourceSessionKey = String(options["source-session-key"] || "").trim();
   const sourceSessionId = String(options["source-session-id"] || "").trim();
+  const notifyExternal = parseBoolFlag(options["notify-external"]);
+  const summaryText = String(options["summary-text"] || "").trim();
 
   const originalPushEnabled = process.env.A2HMARKET_PUSH_ENABLED;
   if (originalPushEnabled == null) {
@@ -123,9 +129,11 @@ async function runA2aSend(options) {
       envelope,
       sourceSessionId,
       sourceSessionKey,
+      notifyExternal,
+      summaryText,
     });
     logger.info(
-      `a2a send queued target_id=${targetAgentId} message_type=${messageType} message_id=${envelope.message_id} trace_id=${envelope.trace_id} source_session=${queued.source_session_key || queued.source_session_id || "-"} source_session_source=${queued.source_session_source || "-"} duplicate=${queued.created ? "false" : "true"}`
+      `a2a send queued target_id=${targetAgentId} message_type=${messageType} message_id=${envelope.message_id} trace_id=${envelope.trace_id} source_session=${queued.source_session_key || queued.source_session_id || "-"} source_session_source=${queued.source_session_source || "-"} duplicate=${queued.created ? "false" : "true"} notify=${queued.notify_enqueued || false}`
     );
     process.stdout.write(
       JSON.stringify(
@@ -148,6 +156,8 @@ async function runA2aSend(options) {
           source_session_source: queued.source_session_source,
           source_session_lookup_ok: queued.source_session_lookup_ok,
           source_session_lookup_detail: scrubSessionRefs(queued.source_session_lookup_detail),
+          notify_enqueued: queued.notify_enqueued || false,
+          notify_skip_reason: queued.notify_skip_reason,
         },
         null,
         2
