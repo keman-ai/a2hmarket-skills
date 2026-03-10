@@ -722,6 +722,31 @@ class EventStore {
     };
   }
 
+  updateEventTargetSession({ eventId, sessionId, sessionKey, updatedAt }) {
+    const normalizedEventId = String(eventId || "").trim();
+    if (!normalizedEventId) return { updated: false, reason: "missing_event_id" };
+    const normalizedSessionId = nullableText(sessionId);
+    const normalizedSessionKey = nullableText(sessionKey);
+    if (!normalizedSessionId && !normalizedSessionKey) {
+      return { updated: false, reason: "missing_session_ref" };
+    }
+    const ts = coerceInt(updatedAt, nowMs());
+    const result = this.db.prepare(`
+      UPDATE message_event
+      SET target_session_id = ?, target_session_key = ?, updated_at = ?
+      WHERE event_id = ?
+    `).run(
+      normalizedSessionId,
+      normalizedSessionKey,
+      ts,
+      normalizedEventId
+    );
+    return {
+      updated: coerceInt(result && result.changes, 0) > 0,
+      reason: coerceInt(result && result.changes, 0) > 0 ? "" : "event_not_found",
+    };
+  }
+
   // --- media_outbox methods ---
   // 专用于带图片（mediaUrl）的外部渠道通知，如飞书收款二维码推送
 

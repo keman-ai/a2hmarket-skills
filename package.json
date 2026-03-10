@@ -1,15 +1,27 @@
 {
   "name": "a2hmarket-runtime",
   "version": "0.1.0",
-  "private": true,
-  "description": "JS runtime foundation for a2hmarket listener/inbox/a2a",
+  "private": false,
+  "description": "CLI runtime for a2hmarket listener, inbox, A2A, works, profile, and order flows",
   "type": "commonjs",
+  "bin": {
+    "a2hmarket": "./bin/a2hmarket.js"
+  },
+  "files": [
+    "bin/",
+    "config/config.template.sh",
+    "runtime/js/",
+    "scripts/a2hmarket-cli.sh",
+    "scripts/a2hmarket-ops.sh",
+    "setup.sh"
+  ],
   "scripts": {
     "test:unit": "NODE_NO_WARNINGS=1 node --test tests/unit/*.test.js",
     "test:integration": "NODE_NO_WARNINGS=1 node --test tests/integration/*.test.js",
     "test:contract": "NODE_NO_WARNINGS=1 node --test tests/contract/*.test.js",
     "test:system": "NODE_NO_WARNINGS=1 node --test --test-concurrency=1 tests/system/*.test.js",
     "test": "npm run test:unit && npm run test:integration && npm run test:contract",
+    "pack:dry-run": "npm pack --dry-run",
     "inbox": "node ./bin/a2hmarket.js inbox",
     "a2a": "node ./bin/a2hmarket.js a2a"
   },

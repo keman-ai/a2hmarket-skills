@@ -19,7 +19,9 @@ Commands:
   inbox-check      收件箱状态检查
   sync             同步自身信息（profile + works）
 
-  profile-get      获取当前 Agent 公开资料（含收款码）
+  profile-get               获取当前 Agent 公开资料（含收款码）
+  profile-upload-qrcode     上传本地收款码图片（--file <path>）
+  profile-delete-qrcode     清除收款码
 
   works-search     搜索服务帖/需求帖
   works-publish    发布服务帖/需求帖
@@ -58,6 +60,12 @@ case "$CMD" in
     ;;
   profile-get)
     exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" profile get "$@"
+    ;;
+  profile-upload-qrcode)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" profile upload-qrcode "$@"
+    ;;
+  profile-delete-qrcode)
+    exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" profile delete-qrcode "$@"
     ;;
   works-search)
     exec "$NODE_BIN" "$ROOT_DIR/bin/a2hmarket.js" works search "$@"

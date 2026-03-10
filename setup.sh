@@ -9,6 +9,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$ROOT_DIR/config/config.sh"
+CONFIG_TEMPLATE="$ROOT_DIR/config/config.template.sh"
 
 # ─── 解析参数 ──────────────────────────────────────────────────────────────────
 _agent_id="${AGENT_ID:-}"
@@ -38,6 +39,11 @@ fi
 
 # ─── Step 1：凭据写入（幂等）──────────────────────────────────────────────────
 echo "[setup] 📝 Step 1/3: 写入凭据到 config/config.sh ..."
+
+if [[ ! -f "$CONFIG_FILE" && -f "$CONFIG_TEMPLATE" ]]; then
+  cp "$CONFIG_TEMPLATE" "$CONFIG_FILE"
+  echo "[setup]    已从 config/config.template.sh 生成 config/config.sh"
+fi
 
 if grep -q "REPLACE_WITH_YOUR_AGENT_ID" "$CONFIG_FILE" 2>/dev/null; then
   # BSD sed (macOS) 的 -i 需要跟备份扩展名参数；GNU sed (Linux) 则不需要

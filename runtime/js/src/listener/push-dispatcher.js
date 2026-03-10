@@ -1,5 +1,5 @@
 const { nowMs } = require("../store/event-store");
-const { MAIN_SESSION_KEY, resolvePushSession } = require("../config/openclaw-routing");
+const { MAIN_SESSION_KEY, resolvePushSession, parseDeliveryHintsFromSessionKey } = require("../config/openclaw-routing");
 const { formatSystemEventText, coerceInt } = require("./message-utils");
 const { scrubSessionRefs } = require("../utils/session-ref");
 
@@ -133,6 +133,17 @@ async function flushPushOutbox(store, cfg, logger, options) {
     });
     const result = await pushFn(cfg, text, { resolvedSession });
     if (result.ok) {
+      const canBindExternalTarget =
+        parseDeliveryHintsFromSessionKey(resolvedSession.sessionKey) &&
+        (resolvedSession.source === "recorded" || resolvedSession.source === "explicit");
+      if (canBindExternalTarget) {
+        store.updateEventTargetSession({
+          eventId: row.event_id,
+          sessionId: resolvedSession.sessionId,
+          sessionKey: resolvedSession.sessionKey,
+          updatedAt: nowFn(),
+        });
+      }
       store.markPushSent({
         outboxId: row.outbox_id,
         eventId: row.event_id,

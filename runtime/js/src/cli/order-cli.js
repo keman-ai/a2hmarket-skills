@@ -6,7 +6,9 @@ function printUsage() {
     [
       "Usage:",
       "  a2hmarket order create --customer-id <id> --title <title> --content <text> --price-cent <n> --product-id <id>",
-      "  a2hmarket order confirm --order-id <id>",
+      "  a2hmarket order confirm --order-id <id>        # C端(买方) 确认订单",
+      "  a2hmarket order reject  --order-id <id>        # C端(买方) 拒绝订单",
+      "  a2hmarket order cancel  --order-id <id>        # B端(卖方) 取消订单",
       "  a2hmarket order get --order-id <id>",
       "  a2hmarket order list-sales [--status <status>] [--page <n>] [--page-size <n>]",
       "  a2hmarket order list-purchase [--status <status>] [--page <n>] [--page-size <n>]",
@@ -88,6 +90,38 @@ async function cmdConfirm(creds, opts) {
   const apiPath = `/findu-trade/api/v1/orders/${orderId}/confirm`;
   const data = await postJson({ creds, apiPath, body: {} });
   outputOk("order.confirm", data);
+  return 0;
+}
+
+// -------------------------------------------------------------------------
+// order reject  (C端/买方)
+// -------------------------------------------------------------------------
+
+async function cmdReject(creds, opts) {
+  const orderId = opts["order-id"] || "";
+  if (!orderId) {
+    outputError("order.reject", { message: "--order-id 不能为空", platformCode: "INVALID_ARGUMENT" });
+    return 1;
+  }
+  const apiPath = `/findu-trade/api/v1/orders/${orderId}/reject`;
+  const data = await postJson({ creds, apiPath, body: {} });
+  outputOk("order.reject", data);
+  return 0;
+}
+
+// -------------------------------------------------------------------------
+// order cancel  (B端/卖方)
+// -------------------------------------------------------------------------
+
+async function cmdCancel(creds, opts) {
+  const orderId = opts["order-id"] || "";
+  if (!orderId) {
+    outputError("order.cancel", { message: "--order-id 不能为空", platformCode: "INVALID_ARGUMENT" });
+    return 1;
+  }
+  const apiPath = `/findu-trade/api/v1/orders/${orderId}/cancel`;
+  const data = await postJson({ creds, apiPath, body: {} });
+  outputOk("order.cancel", data);
   return 0;
 }
 
@@ -179,6 +213,8 @@ async function runOrderCli(args) {
 
     if (sub === "create") return await cmdCreate(creds, opts);
     if (sub === "confirm") return await cmdConfirm(creds, opts);
+    if (sub === "reject") return await cmdReject(creds, opts);
+    if (sub === "cancel") return await cmdCancel(creds, opts);
     if (sub === "get") return await cmdGet(creds, opts);
     if (sub === "list-sales") {
       return await cmdListOrders("order.list-sales", creds, opts,
@@ -190,7 +226,7 @@ async function runOrderCli(args) {
     }
 
     // P2 stubs
-    const p2cmds = ["reject", "cancel", "review-create", "review-list"];
+    const p2cmds = ["review-create", "review-list"];
     if (p2cmds.includes(sub)) {
       outputError(`order.${sub}`, {
         message: `order ${sub} 为 P2 功能，尚未实现。`,

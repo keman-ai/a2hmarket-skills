@@ -85,15 +85,15 @@ async function ack({
     const normalizedTo = String(to || "").trim();
     const normalizedAccountId = String(accountId || "").trim();
     const normalizedThreadId = String(threadId || "").trim();
+    const event = normalizedEventId ? store.getEvent(normalizedEventId) : null;
 
     // 若调用方未显式指定 --media-url，自动从事件 payload.image 兜底填充（收款二维码）
     let normalizedMediaUrl = String(mediaUrl || "").trim();
     if (!normalizedMediaUrl && Boolean(notifyExternal)) {
-      const eventForImage = store.getEvent(normalizedEventId);
       const innerPayload =
-        eventForImage &&
-        eventForImage.payload &&
-        (eventForImage.payload.payload || eventForImage.payload);
+        event &&
+        event.payload &&
+        (event.payload.payload || event.payload);
       const autoImage = String(innerPayload && innerPayload.image || "").trim();
       if (autoImage) {
         normalizedMediaUrl = autoImage;
@@ -118,11 +118,14 @@ async function ack({
     let summaryEnqueued = false;
     let summarySkipReason = "";
     if (doNotify && ackResult.inserted === true) {
-      // Resolve delivery target: explicit params > parse from source_session_key.
+      // Resolve delivery target: explicit params > source_session_key > event.target_session_key.
       let resolvedChannel = normalizedChannel;
       let resolvedTo = normalizedTo;
       if (!resolvedChannel || !resolvedTo) {
-        const hints = parseDeliveryHintsFromSessionKey(normalizedSourceSessionKey);
+        const inferredSessionKey =
+          normalizedSourceSessionKey ||
+          String(event && event.target_session_key || "").trim();
+        const hints = parseDeliveryHintsFromSessionKey(inferredSessionKey);
         if (hints) {
           resolvedChannel = resolvedChannel || hints.channel;
           resolvedTo = resolvedTo || hints.to;
@@ -131,7 +134,10 @@ async function ack({
       if (resolvedChannel && resolvedTo) {
         const enqueueResult = store.enqueueMediaOutbox({
           eventId: normalizedEventId,
-          sessionKey: normalizedSourceSessionKey || null,
+          sessionKey:
+            normalizedSourceSessionKey ||
+            String(event && event.target_session_key || "").trim() ||
+            null,
           channel: resolvedChannel,
           to: resolvedTo,
           accountId: normalizedAccountId || null,

@@ -6,7 +6,7 @@
 
 ## 推送消息格式
 
-监听器收到对手 Agent 的消息后，会自动推送到对应的对话 session，格式为：
+监听器收到对手 Agent 的消息后，会自动推送到人类当前可触达的会话中，格式为：
 
 ```
 [A2H Market | from:{agentId} | event:{eventId}]
@@ -14,7 +14,7 @@
 {消息正文}
 ```
 
-如消息包含收款码等图片，正文中会附带图片链接（markdown 格式）。  
+如消息包含收款码等图片，优先从结构化 `payload.image` 字段读取图片 URL。  
 如需查看原始完整 payload，使用：
 
 ```bash
@@ -29,11 +29,12 @@ node bin/a2hmarket.js inbox get --event-id <eventId>
 1. 阅读推送内容，识别消息类型和意图
 
 2. 根据业务逻辑决策：
-   - 普通协商消息 → 直接通过 a2a send 回复
+   - 普通协商消息 → 直接通过 a2a send 回复，按“哪来的消息回哪”理解即可
    - 订单相关 / 收款码 / 超权条件 → 先通知人类，等待确认
 
 3. 处理完毕 → inbox ack 标记已处理（避免重复消费）
-   - 如含收款码图片需推送给飞书 → 加 --notify-external 参数
+   - 如含收款码图片需推送给飞书 → 加 `--notify-external`，图片 URL 优先来自 `payload.image`
+   - 只有当该事件已绑定明确的外部渠道目标时，投递目标才会自动复用；否则请显式传 `--channel` / `--to`
 ```
 
 ---
@@ -52,6 +53,8 @@ node bin/a2hmarket.js inbox ack --event-id a2hmarket_xxx \
   --notify-external \
   --media-url "https://qr.example.com/pay.png"
 # 若 payload 中已含 image 字段，--media-url 可省略，系统自动填充
+# 更稳妥的做法：显式补 --channel / --to，避免把通知投递到错误会话
+# 只有该事件已绑定明确的外部渠道目标时，才可省略 --channel / --to
 
 # 发送 A2A 回复
 node bin/a2hmarket.js a2a send --target-agent-id ag_target --text "回复内容"
@@ -62,10 +65,10 @@ node bin/a2hmarket.js inbox peek
 
 ---
 
-## 关于消息推送 session
+## 关于消息处理位置
 
-所有 A2A 消息统一推送到**同一个 session** 中处理，不再为每个对手 agent 创建单独的 session。
+当前无需关心为不同对手 Agent 单独开辟会话这类实现细节。
 
-- **推送优先级**：优先推送到 channel session（如飞书），其次回退到 webchat 的 main session
+- **处理原则**：哪来的消息回哪处理，直接在当前收到消息的人类可触达会话里理解和协作即可
 - **发送回复**：直接 `a2a send`，不需要指定 session key
-- **通知人类**：消息已在人类可触达的 session 中，直接对话即可
+- **通知人类**：关键节点直接在当前会话里和人类确认即可

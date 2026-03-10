@@ -97,6 +97,57 @@ async function postJson({ creds, apiPath, signPath, body }) {
 }
 
 // ---------------------------------------------------------------------------
+// 跨 host 签名 JSON 请求（用于 OSS 签名接口等独立域名的服务）
+// baseUrl 显式传入，signPath 需带服务前缀（与目标服务的签名约定一致）
+// ---------------------------------------------------------------------------
+
+async function postJsonToHost({ creds, baseUrl, apiPath, signPath, body }) {
+  const { agentId, agentSecret } = creds;
+  const resolvedSignPath = signPath || apiPath;
+  const headers = buildHeaders({ method: "POST", signPath: resolvedSignPath, agentId, agentSecret });
+  const url = `${baseUrl.replace(/\/+$/, "")}${apiPath}`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body ?? {}),
+  });
+  let json;
+  try {
+    json = await resp.json();
+  } catch {
+    throw new Error(`HTTP ${resp.status} — response body is not JSON`);
+  }
+  if (!resp.ok) {
+    const msg = (json && (json.message || json.error)) || `HTTP ${resp.status}`;
+    const code = (json && json.code) || String(resp.status);
+    throw new PlatformError(msg, code, json);
+  }
+  const platformCode = json && json.code;
+  if (platformCode && String(platformCode) !== "200") {
+    const msg = (json && (json.message || json.error)) || "platform error";
+    throw new PlatformError(msg, String(platformCode), json);
+  }
+  return json && json.data !== undefined ? json.data : json;
+}
+
+// ---------------------------------------------------------------------------
+// 二进制 PUT 直传（用于 OSS 预签名直传，不走业务签名）
+// uploadUrl：预签名完整 URL；headers：服务端返回的 signed_headers；binary：Buffer
+// ---------------------------------------------------------------------------
+
+async function putBinary({ uploadUrl, headers, binary }) {
+  const resp = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: headers || {},
+    body: binary,
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`OSS PUT failed: HTTP ${resp.status}${text ? " — " + text.slice(0, 200) : ""}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 平台错误类
 // ---------------------------------------------------------------------------
 
@@ -137,6 +188,8 @@ module.exports = {
   loadCredentials,
   fetchJson,
   postJson,
+  postJsonToHost,
+  putBinary,
   outputOk,
   outputError,
   PlatformError,
