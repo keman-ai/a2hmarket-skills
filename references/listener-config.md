@@ -4,7 +4,7 @@
 
 ## 配置方式
 
-所有配置统一写在 `a2hmarket/config/config.sh` 中。`setup.sh` 会自动写入凭据，无需手动编辑。
+所有配置统一写在 `~/.a2hmarket/config.sh` 中。`setup.sh` 会自动写入凭据，无需手动编辑。
 
 如需覆盖默认值，在 `config.sh` 中导出对应环境变量即可。Runtime 内部默认值已内置在 `runtime/js/src/config/loader.js` 中，通常不需要修改。
 
@@ -40,20 +40,20 @@
 ## 运行方式
 
 ```bash
-# 运维操作（a2hmarket-ops.sh）
-./scripts/a2hmarket-ops.sh bootstrap   # 手动执行会话自举（幂等）
-./scripts/a2hmarket-ops.sh start       # 启动 listener
-./scripts/a2hmarket-ops.sh stop        # 停止 listener
-./scripts/a2hmarket-ops.sh status      # 查看监听状态
+# 运维操作
+npx a2hmarket-ops bootstrap   # 手动执行会话自举（幂等）
+npx a2hmarket-ops start       # 启动 listener
+npx a2hmarket-ops stop        # 停止 listener
+npx a2hmarket-ops status      # 查看监听状态
 
-# CLI 操作（a2hmarket-cli.sh）
-./scripts/a2hmarket-cli.sh inbox-peek --consumer openclaw
-./scripts/a2hmarket-cli.sh inbox-check --consumer openclaw
-./scripts/a2hmarket-cli.sh a2a-send --target-agent-id ag_target --text "hello from a2hmarket"
+# CLI 操作
+npx a2hmarket inbox peek --consumer openclaw
+npx a2hmarket inbox check --consumer openclaw
+npx a2hmarket a2a send --target-agent-id ag_target --text "hello from a2hmarket"
 
 # 标准做法：显式绑定来源 session（推荐）
-./scripts/a2hmarket-cli.sh a2a-send --target-agent-id ag_target --text "hello" --source-session-key agent:main:feishu:direct:ou_xxx
+npx a2hmarket a2a send --target-agent-id ag_target --text "hello" --source-session-key agent:main:feishu:direct:ou_xxx
 
 # 仅调试兜底：允许自动推断 source session（不推荐用于正式链路）
-./scripts/a2hmarket-cli.sh a2a-send --target-agent-id ag_target --text "hello" --auto-source-session
+npx a2hmarket a2a send --target-agent-id ag_target --text "hello" --auto-source-session
 ```

@@ -6,6 +6,7 @@ const { acquireSingleInstanceLock } = require("./lock");
 const { startA2aService } = require("../a2a/service");
 const { formatSessionRef } = require("../utils/session-ref");
 const { GatewayClient } = require("../gateway/gateway-client");
+const { uploadImageFromUrl } = require("../gateway/feishu-client");
 const {
   looksLikeSessionKey,
   looksLikeUuid,
@@ -163,8 +164,12 @@ async function runListener(cfg, options) {
         }
       }
 
+      const feishuClient = typeof cfg.resolveFeishuCredentials === "function"
+        ? { uploadImageFromUrl, resolveCredentials: cfg.resolveFeishuCredentials }
+        : null;
+
       try {
-        const mediaStats = await flushMediaOutbox(store, cfg, logger, { gatewayClient: gw });
+        const mediaStats = await flushMediaOutbox(store, cfg, logger, { gatewayClient: gw, feishuClient });
         stats.mediaSent = mediaStats.sent;
         stats.mediaRetried = mediaStats.retried;
         stats.mediaFailed = mediaStats.failed;

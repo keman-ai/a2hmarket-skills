@@ -5,15 +5,15 @@
   "description": "CLI runtime for a2hmarket listener, inbox, A2A, works, profile, and order flows",
   "type": "commonjs",
   "bin": {
-    "a2hmarket": "./bin/a2hmarket.js"
+    "a2hmarket": "./bin/a2hmarket.js",
+    "a2hmarket-ops": "./bin/a2hmarket-ops.js"
   },
   "files": [
     "bin/",
     "config/config.template.sh",
     "runtime/js/",
     "scripts/a2hmarket-cli.sh",
-    "scripts/a2hmarket-ops.sh",
-    "setup.sh"
+    "scripts/a2hmarket-ops.sh"
   ],
   "scripts": {
     "test:unit": "NODE_NO_WARNINGS=1 node --test tests/unit/*.test.js",

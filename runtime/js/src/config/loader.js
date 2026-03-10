@@ -2,10 +2,12 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const {
+  A2HMARKET_ROOT,
   DEFAULT_DB_PATH,
   DEFAULT_LOCK_PATH,
   DEFAULT_LOG_PATH,
   DEFAULT_PID_PATH,
+  DEFAULT_CONFIG_PATH,
   resolvePath,
 } = require("./paths");
 const {
@@ -13,6 +15,10 @@ const {
   DEFAULT_OPENCLAW_SESSION_LABEL,
   writeOpenclawSessionState,
 } = require("./openclaw-session");
+const {
+  resolveOpenclawConfigPath,
+  resolveOpenclawFeishuCredentials,
+} = require("./openclaw-feishu");
 
 function nowMs() {
   return Date.now();
@@ -68,19 +74,20 @@ function loadShellExports(configPath) {
 }
 
 function resolveConfigPath() {
-  const { A2HMARKET_ROOT } = require("./paths");
-  const authoritativePath = path.join(A2HMARKET_ROOT, "config", "config.sh");
   const explicit = String(process.env.A2HMARKET_CONFIG_PATH || "").trim();
-  if (!explicit) return authoritativePath;
-
-  const explicitPath = path.resolve(explicit);
-  const authorityResolved = path.resolve(authoritativePath);
-  if (explicitPath !== authorityResolved) {
-    throw new Error(
-      `A2HMARKET_CONFIG_PATH is not allowed: ${explicitPath}. authoritative config path is ${authorityResolved}`
-    );
+  if (explicit) {
+    return path.isAbsolute(explicit)
+      ? explicit
+      : path.resolve(process.cwd(), explicit);
   }
-  return authoritativePath;
+  if (fs.existsSync(DEFAULT_CONFIG_PATH)) {
+    return DEFAULT_CONFIG_PATH;
+  }
+  const legacyPath = path.join(A2HMARKET_ROOT, "config", "config.sh");
+  if (fs.existsSync(legacyPath)) {
+    return legacyPath;
+  }
+  return DEFAULT_CONFIG_PATH;
 }
 
 function resolveListenerConfig() {
@@ -153,6 +160,10 @@ function resolveListenerConfig() {
   const openclawSessionStrict = parseBool(pickWithDefault("A2HMARKET_OPENCLAW_SESSION_STRICT"), true);
   const openclawSessionKeyRaw = DEFAULT_OPENCLAW_SESSION_KEY;
   const mqttTokenBaseUrl = pickWithDefault("A2HMARKET_MQTT_TOKEN_BASE_URL").replace(/\/+$/, "");
+  const openclawConfigPath = resolveOpenclawConfigPath();
+  const resolveFeishuCredentials = (accountId) => {
+    return resolveOpenclawFeishuCredentials(accountId).credentials;
+  };
 
   return {
     configPath,
@@ -224,6 +235,8 @@ function resolveListenerConfig() {
     ),
     pushBatchSize: parseIntBound(pickWithDefault("A2HMARKET_PUSH_BATCH_SIZE"), 20, 1, 200),
     pushOnce: parseBool(pickWithDefault("A2HMARKET_PUSH_ONCE"), true),
+    openclawConfigPath,
+    resolveFeishuCredentials,
     startedAtMs: nowMs(),
   };
 }

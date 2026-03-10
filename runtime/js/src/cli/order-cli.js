@@ -6,15 +6,17 @@ function printUsage() {
     [
       "Usage:",
       "  a2hmarket order create --customer-id <id> --title <title> --content <text> --price-cent <n> --product-id <id>",
-      "  a2hmarket order confirm --order-id <id>        # C端(买方) 确认订单",
-      "  a2hmarket order reject  --order-id <id>        # C端(买方) 拒绝订单",
-      "  a2hmarket order cancel  --order-id <id>        # B端(卖方) 取消订单",
+      "  a2hmarket order confirm  --order-id <id>               # C端(买方) 确认订单",
+      "  a2hmarket order reject   --order-id <id>               # C端(买方) 拒绝订单",
+      "  a2hmarket order cancel   --order-id <id>               # B端(卖方) 取消订单",
+      "  a2hmarket order confirm-received --order-id <id>       # B端(卖方) 确认收款",
+      "  a2hmarket order confirm-service-completed --order-id <id>  # C端(买方) 确认服务完成",
       "  a2hmarket order get --order-id <id>",
       "  a2hmarket order list-sales [--status <status>] [--page <n>] [--page-size <n>]",
       "  a2hmarket order list-purchase [--status <status>] [--page <n>] [--page-size <n>]",
       "",
       "  price-cent: 以分为单位的正整数，例如 10000 = 100元",
-      "  status: PENDING_CONFIRM | CONFIRMED | COMPLETED | REJECTED | CANCELLED",
+      "  status: PENDING_CONFIRM | CONFIRMED | PAID | COMPLETED | REJECTED | CANCELLED",
     ].join("\n") + "\n"
   );
 }
@@ -126,6 +128,38 @@ async function cmdCancel(creds, opts) {
 }
 
 // -------------------------------------------------------------------------
+// order confirm-received  (B端/卖方 确认收款)
+// -------------------------------------------------------------------------
+
+async function cmdConfirmReceived(creds, opts) {
+  const orderId = opts["order-id"] || "";
+  if (!orderId) {
+    outputError("order.confirm-received", { message: "--order-id 不能为空", platformCode: "INVALID_ARGUMENT" });
+    return 1;
+  }
+  const apiPath = `/findu-trade/api/v1/orders/${orderId}/confirm-received`;
+  const data = await postJson({ creds, apiPath, body: {} });
+  outputOk("order.confirm-received", data);
+  return 0;
+}
+
+// -------------------------------------------------------------------------
+// order confirm-service-completed  (C端/买方 确认服务完成)
+// -------------------------------------------------------------------------
+
+async function cmdConfirmServiceCompleted(creds, opts) {
+  const orderId = opts["order-id"] || "";
+  if (!orderId) {
+    outputError("order.confirm-service-completed", { message: "--order-id 不能为空", platformCode: "INVALID_ARGUMENT" });
+    return 1;
+  }
+  const apiPath = `/findu-trade/api/v1/orders/${orderId}/confirm-service-completed`;
+  const data = await postJson({ creds, apiPath, body: {} });
+  outputOk("order.confirm-service-completed", data);
+  return 0;
+}
+
+// -------------------------------------------------------------------------
 // order get
 // -------------------------------------------------------------------------
 
@@ -215,6 +249,8 @@ async function runOrderCli(args) {
     if (sub === "confirm") return await cmdConfirm(creds, opts);
     if (sub === "reject") return await cmdReject(creds, opts);
     if (sub === "cancel") return await cmdCancel(creds, opts);
+    if (sub === "confirm-received") return await cmdConfirmReceived(creds, opts);
+    if (sub === "confirm-service-completed") return await cmdConfirmServiceCompleted(creds, opts);
     if (sub === "get") return await cmdGet(creds, opts);
     if (sub === "list-sales") {
       return await cmdListOrders("order.list-sales", creds, opts,

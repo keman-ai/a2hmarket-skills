@@ -1,6 +1,15 @@
 const { nowMs } = require("../store/event-store");
 const { coerceInt } = require("./message-utils");
 
+// Feishu channel identifier
+const FEISHU_CHANNELS = new Set(["feishu", "lark", "飞书", "lark-open"]);
+
+function isFeishuChannel(channel) {
+  if (!channel) return false;
+  const lower = String(channel).toLowerCase();
+  return FEISHU_CHANNELS.has(lower);
+}
+
 function calculateBackoffMs(attempt, maxDelayMs) {
   const normalizedAttempt = Math.max(1, Math.min(10, coerceInt(attempt, 1)));
   const base = 1000 * 2 ** (normalizedAttempt - 1);
@@ -8,7 +17,7 @@ function calculateBackoffMs(attempt, maxDelayMs) {
   return Math.max(1000, capped);
 }
 
-async function runGatewaySend(gatewayClient, row) {
+async function runGatewaySend(gatewayClient, row, feishuClient) {
   const started = nowMs();
   try {
     const params = {
@@ -18,11 +27,36 @@ async function runGatewaySend(gatewayClient, row) {
     if (row.account_id) params.accountId = String(row.account_id);
     if (row.thread_id) params.threadId = String(row.thread_id);
     if (row.message_text) params.message = String(row.message_text);
-    if (row.media_url) params.mediaUrl = String(row.media_url);
+
+    // Handle Feishu image upload
+    if (isFeishuChannel(row.channel) && row.media_url && feishuClient) {
+      const mediaUrl = String(row.media_url);
+      const resolveCredentials =
+        typeof feishuClient.resolveCredentials === "function"
+          ? feishuClient.resolveCredentials
+          : null;
+      const credentials = resolveCredentials ? resolveCredentials(row.account_id) : null;
+      if (!credentials || !credentials.appId || !credentials.appSecret) {
+        throw new Error(`missing Feishu credentials for image upload channel=${row.channel}`);
+      }
+      if (!params.accountId && credentials.accountId) {
+        params.accountId = String(credentials.accountId);
+      }
+      const imageKey = await feishuClient.uploadImageFromUrl(
+        credentials.appId,
+        credentials.appSecret,
+        mediaUrl
+      );
+      params.imageKey = imageKey;
+      // Feishu must send images by image_key rather than the original URL.
+    } else if (row.media_url) {
+      params.mediaUrl = String(row.media_url);
+    }
 
     await gatewayClient.send(params);
     const elapsed = nowMs() - started;
-    return { ok: true, detail: `elapsed_ms=${elapsed} gateway send ok channel=${row.channel} media=${!!row.media_url}` };
+    const sentWithImageKey = params.imageKey ? " imageKey" : "";
+    return { ok: true, detail: `elapsed_ms=${elapsed} gateway send ok channel=${row.channel} media=${!!row.media_url}${sentWithImageKey}` };
   } catch (err) {
     const elapsed = nowMs() - started;
     return { ok: false, detail: `elapsed_ms=${elapsed} ${err.message || String(err)}`.trim() };
@@ -35,9 +69,10 @@ async function flushMediaOutbox(store, cfg, logger, options) {
   }
   const nowFn = options && typeof options.now === "function" ? options.now : nowMs;
   const gatewayClient = options && options.gatewayClient;
+  const feishuClient = options && options.feishuClient;
   const sendFn = options && typeof options.send === "function"
     ? options.send
-    : (_, row) => runGatewaySend(gatewayClient, row);
+    : (_, row) => runGatewaySend(gatewayClient, row, feishuClient);
 
   const batchSize = coerceInt(cfg.pushBatchSize, 20);
   const maxRetries = coerceInt(cfg.mediaMaxRetries, 5);

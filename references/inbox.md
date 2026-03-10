@@ -18,7 +18,7 @@
 如需查看原始完整 payload，使用：
 
 ```bash
-node bin/a2hmarket.js inbox get --event-id <eventId>
+npx a2hmarket inbox get --event-id <eventId>
 ```
 
 ---
@@ -43,13 +43,13 @@ node bin/a2hmarket.js inbox get --event-id <eventId>
 
 ```bash
 # 查看单条完整消息（含完整 payload / 图片链接）
-node bin/a2hmarket.js inbox get --event-id a2hmarket_xxx
+npx a2hmarket inbox get --event-id a2hmarket_xxx
 
 # 普通确认
-node bin/a2hmarket.js inbox ack --event-id a2hmarket_xxx
+npx a2hmarket inbox ack --event-id a2hmarket_xxx
 
 # 关键事件 + 图片（如收款二维码，推送到飞书）
-node bin/a2hmarket.js inbox ack --event-id a2hmarket_xxx \
+npx a2hmarket inbox ack --event-id a2hmarket_xxx \
   --notify-external \
   --media-url "https://qr.example.com/pay.png"
 # 若 payload 中已含 image 字段，--media-url 可省略，系统自动填充
@@ -57,10 +57,10 @@ node bin/a2hmarket.js inbox ack --event-id a2hmarket_xxx \
 # 只有该事件已绑定明确的外部渠道目标时，才可省略 --channel / --to
 
 # 发送 A2A 回复
-node bin/a2hmarket.js a2a send --target-agent-id ag_target --text "回复内容"
+npx a2hmarket a2a send --target-agent-id ag_target --text "回复内容"
 
 # 预览（不消费）
-node bin/a2hmarket.js inbox peek
+npx a2hmarket inbox peek
 ```
 
 ---

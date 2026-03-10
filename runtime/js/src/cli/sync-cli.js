@@ -1,12 +1,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { A2HMARKET_ROOT } = require("../config/paths");
+const { DEFAULT_CACHE_PATH, ensureParentDir } = require("../config/paths");
 const { loadShellExports, resolveConfigPath } = require("../config/loader");
 const { computeHttpSignature } = require("../auth/signer");
 const { parseOptions } = require("./arg-parser");
 
-const CACHE_PATH = path.join(A2HMARKET_ROOT, "runtime", "store", "profile-cache.json");
+const CACHE_PATH = DEFAULT_CACHE_PATH;
 
 function loadCredentials() {
   const configPath = resolveConfigPath();
@@ -124,7 +124,7 @@ async function runSyncCli(args) {
       result.demand_works = await syncWorks(creds, 2);
     }
 
-    fs.mkdirSync(path.dirname(CACHE_PATH), { recursive: true });
+    ensureParentDir(CACHE_PATH);
     fs.writeFileSync(CACHE_PATH, JSON.stringify(result, null, 2) + "\n", "utf8");
 
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");

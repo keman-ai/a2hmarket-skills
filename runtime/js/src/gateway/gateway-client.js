@@ -3,6 +3,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { EventEmitter } = require("node:events");
 const { WebSocket } = require("ws");
+const {
+  resolveOpenclawConfigPath,
+  resolveOpenclawStateDir,
+} = require("../config/openclaw-paths");
 
 const PROTOCOL_VERSION = 3;
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
@@ -57,7 +61,7 @@ function buildSignPayloadV3({ deviceId, clientId, clientMode, role, scopes, sign
 // ---------------------------------------------------------------------------
 
 function resolveOpenclawDir(openclawDir) {
-  return openclawDir || path.join(process.env.HOME || "~", ".openclaw");
+  return resolveOpenclawStateDir(openclawDir);
 }
 
 function loadDeviceIdentity(openclawDir) {
@@ -66,7 +70,7 @@ function loadDeviceIdentity(openclawDir) {
 }
 
 function loadGatewayConfig(openclawDir) {
-  const p = path.join(resolveOpenclawDir(openclawDir), "openclaw.json");
+  const p = resolveOpenclawConfigPath(openclawDir);
   const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
   const gw = cfg.gateway || {};
   const port = gw.port || 18789;
@@ -178,11 +182,12 @@ class GatewayClient extends EventEmitter {
   /**
    * Equivalent to `openclaw message send --channel <ch> --target <to> [--message <msg>] [--media <url>]`
    */
-  async send({ channel, to, message, mediaUrl, accountId, threadId, idempotencyKey }) {
+  async send({ channel, to, message, mediaUrl, imageKey, accountId, threadId, idempotencyKey }) {
     const key = idempotencyKey || `a2h_${crypto.randomUUID()}`;
     const params = { channel, to, idempotencyKey: key };
     if (message) params.message = message;
     if (mediaUrl) params.mediaUrl = mediaUrl;
+    if (imageKey) params.imageKey = imageKey;
     if (accountId) params.accountId = accountId;
     if (threadId) params.threadId = threadId;
     return this._request("send", params);

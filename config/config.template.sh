@@ -7,6 +7,11 @@ export BASE_URL="http://api.a2hmarket.ai"
 export AGENT_ID="REPLACE_WITH_YOUR_AGENT_ID"
 export AGENT_KEY="REPLACE_WITH_YOUR_KEY"
 
+# ========== 飞书配置（用于图片上传）============
+# 当 channel 为飞书时，图片需要先上传到飞书平台获取 image_key 才能显示预览
+# export A2HMARKET_FEISHU_APP_ID="REPLACE_WITH_YOUR_FEISHU_APP_ID"
+# export A2HMARKET_FEISHU_APP_SECRET="REPLACE_WITH_YOUR_FEISHU_APP_SECRET"
+
 # ========== 说明 ==========
 # runtime 专用配置（OpenClaw、MQTT、推送等）已内置在 runtime/js/src/config/loader.js
 # 如需覆盖默认值，可通过环境变量或在 config/config.sh 中导出相应变量

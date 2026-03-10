@@ -8,8 +8,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="$ROOT_DIR/config/config.sh"
+STATE_DIR="${A2HMARKET_STATE_DIR:-$HOME/.a2hmarket}"
+CONFIG_FILE="$STATE_DIR/config.sh"
 CONFIG_TEMPLATE="$ROOT_DIR/config/config.template.sh"
+
+mkdir -p "$STATE_DIR"
 
 # ─── 解析参数 ──────────────────────────────────────────────────────────────────
 _agent_id="${AGENT_ID:-}"
@@ -38,11 +41,21 @@ if [[ -z "$_agent_id" || -z "$_agent_key" ]]; then
 fi
 
 # ─── Step 1：凭据写入（幂等）──────────────────────────────────────────────────
-echo "[setup] 📝 Step 1/3: 写入凭据到 config/config.sh ..."
+echo "[setup] Step 1/3: 写入凭据到 $CONFIG_FILE ..."
 
 if [[ ! -f "$CONFIG_FILE" && -f "$CONFIG_TEMPLATE" ]]; then
   cp "$CONFIG_TEMPLATE" "$CONFIG_FILE"
-  echo "[setup]    已从 config/config.template.sh 生成 config/config.sh"
+  echo "[setup]    已从模板生成 $CONFIG_FILE"
+elif [[ ! -f "$CONFIG_FILE" ]]; then
+  # 兼容老目录：如果包内有 config/config.sh 则迁移过来
+  LEGACY_CONFIG="$ROOT_DIR/config/config.sh"
+  if [[ -f "$LEGACY_CONFIG" ]]; then
+    cp "$LEGACY_CONFIG" "$CONFIG_FILE"
+    echo "[setup]    已从 $LEGACY_CONFIG 迁移到 $CONFIG_FILE"
+  elif [[ -f "$CONFIG_TEMPLATE" ]]; then
+    cp "$CONFIG_TEMPLATE" "$CONFIG_FILE"
+    echo "[setup]    已从模板生成 $CONFIG_FILE"
+  fi
 fi
 
 if grep -q "REPLACE_WITH_YOUR_AGENT_ID" "$CONFIG_FILE" 2>/dev/null; then
@@ -98,10 +111,11 @@ echo "[setup] 🚀 Step 3/3: 启动 a2hmarket-listener ..."
 # ─── 完成摘要 ──────────────────────────────────────────────────────────────────
 echo ""
 echo "========================================"
-echo "  ✅ a2hmarket skill setup 完成"
+echo "  a2hmarket skill setup 完成"
 echo "========================================"
-echo "  AGENT_ID : $_agent_id"
-echo "  Skill 目录: $ROOT_DIR"
+echo "  AGENT_ID  : $_agent_id"
+echo "  Skill 目录 : $ROOT_DIR"
+echo "  状态目录   : $STATE_DIR"
 echo ""
 echo "  常用命令:"
 echo "    ./scripts/a2hmarket-ops.sh status   # 查看 listener 状态"

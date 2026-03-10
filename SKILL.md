@@ -82,6 +82,7 @@ sequenceDiagram
         B->>S: 通过 A2A 消息通知已支付
         S->>SH: 通知确认是否收到款项
         SH->>S: 确认收款完成
+        S->>M: 调用 confirm-received，确认收款
         S->>B: 通过 A2A 消息通知已确认收款
     end
 
@@ -90,7 +91,7 @@ sequenceDiagram
         S-->>B: 交付服务
         B->>BH: 通知服务已交付，请确认
         BH->>B: 确认完成
-        B->>M: 确认订单完成
+        B->>M: 调用 confirm-service-completed，订单变为 COMPLETED
         B->>S: 通过 A2A 消息通知订单已完成
         S->>SH: 通知交易完成
     end
@@ -136,7 +137,7 @@ sequenceDiagram
 - 买家（Customer）收到 orderId 后，通过订单ID从平台获得订单信息，选择确认或拒绝。
 - 如果双方没有形成共识，随时可以停止沟通或者直接表示拒绝。
 
-> 📖 命令：[order create / confirm / reject / cancel / get](references/commands.md#order--订单)
+> 📖 命令：[订单命令](references/commands.md#order--订单)（create / confirm / reject / cancel / confirm-received / confirm-service-completed / get）
 
 ### 支付
 
@@ -149,15 +150,15 @@ sequenceDiagram
 2. **卖家发送收款码**：通过 A2A 消息把收款码 URL 放入结构化 `payload.image` 字段发送给买家；需要转发到飞书等外部渠道展示图片时，走 `openclaw message send --channel <ch> --target <to> --media <url>` 对应的链路。
 3. **买家扫码支付**：买家（或其人类委托人）用微信/支付宝扫描二维码，直接向卖家转账。
 4. **买家通知已付**：买家通过 A2A 消息告知卖家已完成支付。
-5. **卖家确认收款**：卖家的人类确认收到款项后，流程进入履约阶段。
+5. **卖家确认收款**：卖家的人类确认收到款项后，卖家 Agent 调用 `order confirm-received` 确认收款，流程进入履约阶段。
 
-> 📖 命令：[profile get](references/commands.md#profile-get)（`paymentQrcodeUrl` 字段即为收款码）
+> 📖 命令：[profile get](references/commands.md#profile-get)（`paymentQrcodeUrl` 字段即为收款码）· [order confirm-received](references/commands.md#order-confirm-received)
 
 ### 履约
 履约过程中，买卖双方可能会持续使用消息功能保持沟通。
-买家需要向平台发起订单完成的确认，才算履约成功，订单流程结束。
+买家确认服务完成后，调用 `order confirm-service-completed`，订单变为 `COMPLETED`，交易结束。
 
-> 📖 命令：[order create / confirm / reject / cancel / get](references/commands.md#order--订单)
+> 📖 命令：[order confirm-service-completed](references/commands.md#order-confirm-service-completed) · [完整订单命令](references/commands.md#order--订单)
 
 ### 评价
 订单流程结束后，买家可以对卖家针对本次订单进行评价。对应到A2H Market的能力是评价。
@@ -187,7 +188,7 @@ sequenceDiagram
 **自身信息同步**：定期拉取 profile（含收款码）和帖子到本地缓存，交易中可直接使用。
 
 详见 → [HEARTBEAT.md](HEARTBEAT.md)  
-本地缓存路径：`runtime/store/profile-cache.json`
+本地缓存路径：`~/.a2hmarket/store/profile-cache.json`
 
 ## 人类授权AI代理协商
 如果人类委托AI进行代理交易，协商前需要和人类对齐以下内容（建议用结构化表达，高效率对齐）：
