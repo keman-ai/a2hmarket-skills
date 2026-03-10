@@ -1,6 +1,6 @@
 const { nowMs } = require("../store/event-store");
 const { MAIN_SESSION_KEY, resolvePushSession, parseDeliveryHintsFromSessionKey } = require("../config/openclaw-routing");
-const { formatSystemEventText, coerceInt } = require("./message-utils");
+const { formatSystemEventText, formatDirectPushText, extractImageUrl, coerceInt } = require("./message-utils");
 const { scrubSessionRefs } = require("../utils/session-ref");
 
 function calculateBackoffMs(attempt, maxDelayMs) {
@@ -25,6 +25,36 @@ async function runGatewayPush(gatewayClient, text, options) {
   } catch (err) {
     const elapsed = nowMs() - started;
     return { ok: false, detail: `elapsed_ms=${elapsed} ${err.message || String(err)}`.trim() };
+  }
+}
+
+async function runDirectChannelSend(gatewayClient, row, text, deliveryHints, sessions, resolvedSessionKey) {
+  const started = nowMs();
+  try {
+    const sendParams = {
+      channel: deliveryHints.channel,
+      to: deliveryHints.to,
+      message: text,
+    };
+
+    const imageUrl = extractImageUrl(row);
+    if (imageUrl) sendParams.mediaUrl = imageUrl;
+
+    const sessionKey = String(resolvedSessionKey || "");
+    const matchedSession = (Array.isArray(sessions) ? sessions : []).find(
+      (s) => String((s && s.key) || "") === sessionKey
+    );
+    const accountId =
+      (matchedSession && matchedSession.deliveryContext && matchedSession.deliveryContext.accountId) ||
+      (matchedSession && matchedSession.origin && matchedSession.origin.accountId);
+    if (accountId) sendParams.accountId = String(accountId);
+
+    await gatewayClient.send(sendParams);
+    const elapsed = nowMs() - started;
+    return { ok: true, detail: `elapsed_ms=${elapsed} direct send ok channel=${deliveryHints.channel}` };
+  } catch (err) {
+    const elapsed = nowMs() - started;
+    return { ok: false, detail: `elapsed_ms=${elapsed} direct send failed: ${err.message || String(err)}`.trim() };
   }
 }
 
@@ -120,7 +150,6 @@ async function flushPushOutbox(store, cfg, logger, options) {
       continue;
     }
 
-    const text = formatSystemEventText(row);
     const sessionMaxAgeMs = coerceInt(cfg.pushSessionMaxAgeMs, 60 * 60 * 1000); // 默认 60 min
     const resolvedSession = resolvePushSession({
       sessions: listed.sessions,
@@ -131,7 +160,24 @@ async function flushPushOutbox(store, cfg, logger, options) {
       nowMs: tsNow,
       maxAgeMs: sessionMaxAgeMs,
     });
+
+    const deliveryHints = parseDeliveryHintsFromSessionKey(resolvedSession.sessionKey);
+
+    // 外部渠道（飞书等）：先直接推送原始消息给用户，再 chatSend 通知 AI 处理
+    if (deliveryHints && gatewayClient) {
+      const directText = formatDirectPushText(row);
+      const directResult = await runDirectChannelSend(gatewayClient, row, directText, deliveryHints, listed.sessions, resolvedSession.sessionKey);
+      if (directResult.ok) {
+        logger.info(`direct push ok event_id=${row.event_id} channel=${deliveryHints.channel}`);
+      } else {
+        logger.warn(`direct push failed event_id=${row.event_id}: ${directResult.detail}`);
+      }
+    }
+
+    // chatSend 通知 AI session（无论直接推送是否成功，都要让 AI 处理消息）
+    const text = formatSystemEventText(row);
     const result = await pushFn(cfg, text, { resolvedSession });
+
     if (result.ok) {
       const canBindExternalTarget =
         parseDeliveryHintsFromSessionKey(resolvedSession.sessionKey) &&
@@ -150,8 +196,9 @@ async function flushPushOutbox(store, cfg, logger, options) {
         ackDeadlineAt: nowFn() + ackWaitMs,
       });
       dispatched += 1;
+      const pushMode = deliveryHints ? "direct+chat.send" : "chat.send";
       logger.info(
-        `push dispatched event_id=${row.event_id} consumer=${ackConsumer} ack_wait_ms=${ackWaitMs} target_session=${resolvedSession.sessionKey || resolvedSession.sessionId || "-"} route_source=${resolvedSession.source || "fallback"}`
+        `push dispatched event_id=${row.event_id} consumer=${ackConsumer} ack_wait_ms=${ackWaitMs} target_session=${resolvedSession.sessionKey || resolvedSession.sessionId || "-"} route_source=${resolvedSession.source || "fallback"} mode=${pushMode}`
       );
       continue;
     }

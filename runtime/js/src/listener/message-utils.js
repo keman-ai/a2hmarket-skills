@@ -81,6 +81,21 @@ function formatSystemEventText(event) {
   return lines.join("\n");
 }
 
+function formatDirectPushText(event) {
+  const fullText = extractFullText(event);
+  const body = fullText || sanitizePreview(event.preview, 200);
+  const imageUrl = extractImageUrl(event);
+
+  const lines = [`📩 [A2H Market] 来自 ${event.peer_id}:`, "", body];
+
+  if (imageUrl && !fullText.includes(imageUrl)) {
+    lines.push(`[收款二维码]: ${imageUrl}`);
+  }
+
+  lines.push("", `📌 event: ${event.event_id}`);
+  return lines.join("\n");
+}
+
 function formatSummaryNotificationText({ eventId, peerId, summaryText }) {
   const lines = [
     "【a2hmarket 关键事件摘要】",
@@ -99,5 +114,6 @@ module.exports = {
   extractFullText,
   extractImageUrl,
   formatSystemEventText,
+  formatDirectPushText,
   formatSummaryNotificationText,
 };
