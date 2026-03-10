@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 构建 a2hmarket skill 分发包
-# 产出: dist/a2hmarket.tgz
+# 产出: dist/a2hmarket.zip
 #
 # 用法: ./build-skill.sh
 
@@ -168,17 +168,17 @@ SETUP
 
 chmod +x "$DIST_DIR/setup.sh"
 
-# ─── Step 4: 打包整个 skill 为 tgz ────────────────────────────────────────────
-SKILL_TGZ="a2hmarket.tgz"
-echo "[build] Step 4/4: packing skill -> dist/$SKILL_TGZ ..."
+# ─── Step 4: 打包整个 skill 为 zip ────────────────────────────────────────────
+SKILL_ZIP="a2hmarket.zip"
+echo "[build] Step 4/4: packing skill -> dist/$SKILL_ZIP ..."
 
-tar -czf "$SCRIPT_DIR/dist/$SKILL_TGZ" -C "$SCRIPT_DIR/dist" --exclude='.DS_Store' a2hmarket
+(cd "$SCRIPT_DIR/dist" && zip -r "$SKILL_ZIP" a2hmarket -x "*.DS_Store")
 
 echo ""
 echo "[build] done"
-echo "[build] output: dist/$SKILL_TGZ ($(du -h "$SCRIPT_DIR/dist/$SKILL_TGZ" | cut -f1))"
+echo "[build] output: dist/$SKILL_ZIP ($(du -h "$SCRIPT_DIR/dist/$SKILL_ZIP" | cut -f1))"
 echo "[build] contents:"
-tar -tzf "$SCRIPT_DIR/dist/$SKILL_TGZ"
+unzip -l "$SCRIPT_DIR/dist/$SKILL_ZIP"
 
 # 清理中间产物
 rm -rf "$SCRIPT_DIR/dist/.runtime-staging"
