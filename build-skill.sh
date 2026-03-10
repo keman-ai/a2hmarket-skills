@@ -12,21 +12,33 @@ RUNTIME_TGZ="a2hmarket-runtime.tgz"
 
 cd "$SCRIPT_DIR"
 
-# ─── 读取版本号 ────────────────────────────────────────────────────────────────
-VERSION="$(node -e "process.stdout.write(require('./package.json').version)")"
-PKG_NAME="$(node -e "process.stdout.write(require('./package.json').name)")"
-NPM_TGZ="${PKG_NAME}-${VERSION}.tgz"
+# ─── 读取 package.json 字段（纯 shell，不依赖 node）─────────────────────────
+json_field() {
+  grep "\"$1\"" package.json | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/'
+}
+VERSION="$(json_field version)"
+PKG_NAME="$(json_field name)"
 
-echo "[build] version=$VERSION"
+echo "[build] name=$PKG_NAME version=$VERSION"
 
-# ─── Step 1: npm pack 生成 tgz ─────────────────────────────────────────────────
-echo "[build] Step 1/4: npm pack ..."
-npm pack --silent
-if [[ ! -f "$NPM_TGZ" ]]; then
-  echo "[build] ERROR: npm pack did not produce $NPM_TGZ" >&2
-  exit 1
-fi
-echo "[build]   -> $NPM_TGZ"
+# ─── Step 1: 打包 runtime 为 tgz（用 tar 替代 npm pack）──────────────────────
+echo "[build] Step 1/4: packing runtime ..."
+RUNTIME_STAGING="$SCRIPT_DIR/dist/.runtime-staging/package"
+rm -rf "$SCRIPT_DIR/dist/.runtime-staging"
+mkdir -p "$RUNTIME_STAGING"
+
+cp package.json "$RUNTIME_STAGING/"
+cp -r bin "$RUNTIME_STAGING/"
+mkdir -p "$RUNTIME_STAGING/runtime"
+cp -r runtime/js "$RUNTIME_STAGING/runtime/js"
+mkdir -p "$RUNTIME_STAGING/scripts"
+cp scripts/a2hmarket-cli.sh "$RUNTIME_STAGING/scripts/"
+cp scripts/a2hmarket-ops.sh "$RUNTIME_STAGING/scripts/"
+
+tar -czf "$SCRIPT_DIR/dist/.runtime-staging/$RUNTIME_TGZ" \
+  -C "$SCRIPT_DIR/dist/.runtime-staging" --exclude='.DS_Store' package
+
+echo "[build]   -> $RUNTIME_TGZ"
 
 # ─── Step 2: 创建 dist 目录 ────────────────────────────────────────────────────
 echo "[build] Step 2/4: creating dist/a2hmarket/ ..."
@@ -36,7 +48,7 @@ mkdir -p "$DIST_DIR"
 # ─── Step 3: 复制文件到 dist ───────────────────────────────────────────────────
 echo "[build] Step 3/4: copying files ..."
 
-cp "$NPM_TGZ" "$DIST_DIR/$RUNTIME_TGZ"
+cp "$SCRIPT_DIR/dist/.runtime-staging/$RUNTIME_TGZ" "$DIST_DIR/$RUNTIME_TGZ"
 cp SKILL.md "$DIST_DIR/"
 cp -r references "$DIST_DIR/"
 
@@ -120,29 +132,13 @@ echo "[setup] Step 2/3: writing credentials to $STATE_DIR/config.sh ..."
 CONFIG_FILE="$STATE_DIR/config.sh"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
-  TEMPLATE="$SKILL_DIR/node_modules/a2hmarket-runtime/config/config.template.sh"
-  if [[ -f "$TEMPLATE" ]]; then
-    cp "$TEMPLATE" "$CONFIG_FILE"
-    echo "[setup]   config created from template"
-  else
-    echo "[setup] ERROR: config template not found at $TEMPLATE" >&2
-    exit 1
-  fi
-fi
-
-if grep -q "REPLACE_WITH_YOUR_AGENT_ID" "$CONFIG_FILE" 2>/dev/null; then
-  if sed --version >/dev/null 2>&1; then
-    sed -i \
-      -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
-      -e "s|REPLACE_WITH_YOUR_KEY|${_agent_key}|g" \
-      "$CONFIG_FILE"
-  else
-    sed -i '' \
-      -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
-      -e "s|REPLACE_WITH_YOUR_KEY|${_agent_key}|g" \
-      "$CONFIG_FILE"
-  fi
-  echo "[setup]   credentials written"
+  cat > "$CONFIG_FILE" <<CFGEOF
+#!/usr/bin/env bash
+export BASE_URL="http://api.a2hmarket.ai"
+export AGENT_ID="${_agent_id}"
+export AGENT_KEY="${_agent_key}"
+CFGEOF
+  echo "[setup]   credentials written to $CONFIG_FILE"
 else
   echo "[setup]   credentials already present (skipped)"
 fi
@@ -185,4 +181,4 @@ echo "[build] contents:"
 tar -tzf "$SCRIPT_DIR/dist/$SKILL_TGZ"
 
 # 清理中间产物
-rm -f "$NPM_TGZ"
+rm -rf "$SCRIPT_DIR/dist/.runtime-staging"

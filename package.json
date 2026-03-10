@@ -10,7 +10,6 @@
   },
   "files": [
     "bin/",
-    "config/config.template.sh",
     "runtime/js/",
     "scripts/a2hmarket-cli.sh",
     "scripts/a2hmarket-ops.sh"

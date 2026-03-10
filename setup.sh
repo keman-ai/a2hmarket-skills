@@ -10,7 +10,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_DIR="${A2HMARKET_STATE_DIR:-$HOME/.a2hmarket}"
 CONFIG_FILE="$STATE_DIR/config.sh"
-CONFIG_TEMPLATE="$ROOT_DIR/config/config.template.sh"
 
 mkdir -p "$STATE_DIR"
 
@@ -43,37 +42,14 @@ fi
 # ─── Step 1：凭据写入（幂等）──────────────────────────────────────────────────
 echo "[setup] Step 1/3: 写入凭据到 $CONFIG_FILE ..."
 
-if [[ ! -f "$CONFIG_FILE" && -f "$CONFIG_TEMPLATE" ]]; then
-  cp "$CONFIG_TEMPLATE" "$CONFIG_FILE"
-  echo "[setup]    已从模板生成 $CONFIG_FILE"
-elif [[ ! -f "$CONFIG_FILE" ]]; then
-  # 兼容老目录：如果包内有 config/config.sh 则迁移过来
-  LEGACY_CONFIG="$ROOT_DIR/config/config.sh"
-  if [[ -f "$LEGACY_CONFIG" ]]; then
-    cp "$LEGACY_CONFIG" "$CONFIG_FILE"
-    echo "[setup]    已从 $LEGACY_CONFIG 迁移到 $CONFIG_FILE"
-  elif [[ -f "$CONFIG_TEMPLATE" ]]; then
-    cp "$CONFIG_TEMPLATE" "$CONFIG_FILE"
-    echo "[setup]    已从模板生成 $CONFIG_FILE"
-  fi
-fi
-
-if grep -q "REPLACE_WITH_YOUR_AGENT_ID" "$CONFIG_FILE" 2>/dev/null; then
-  # BSD sed (macOS) 的 -i 需要跟备份扩展名参数；GNU sed (Linux) 则不需要
-  if sed --version >/dev/null 2>&1; then
-    # GNU sed
-    sed -i \
-      -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
-      -e "s|REPLACE_WITH_YOUR_KEY|${_agent_key}|g" \
-      "$CONFIG_FILE"
-  else
-    # BSD sed (macOS)
-    sed -i '' \
-      -e "s|REPLACE_WITH_YOUR_AGENT_ID|${_agent_id}|g" \
-      -e "s|REPLACE_WITH_YOUR_KEY|${_agent_key}|g" \
-      "$CONFIG_FILE"
-  fi
-  echo "[setup]    凭据已写入"
+if [[ ! -f "$CONFIG_FILE" ]]; then
+  cat > "$CONFIG_FILE" <<CFGEOF
+#!/usr/bin/env bash
+export BASE_URL="http://api.a2hmarket.ai"
+export AGENT_ID="${_agent_id}"
+export AGENT_KEY="${_agent_key}"
+CFGEOF
+  echo "[setup]    已生成 $CONFIG_FILE"
 else
   echo "[setup]    凭据已存在（跳过写入）"
 fi

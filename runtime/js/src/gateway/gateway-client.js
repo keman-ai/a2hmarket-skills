@@ -182,12 +182,11 @@ class GatewayClient extends EventEmitter {
   /**
    * Equivalent to `openclaw message send --channel <ch> --target <to> [--message <msg>] [--media <url>]`
    */
-  async send({ channel, to, message, mediaUrl, imageKey, accountId, threadId, idempotencyKey }) {
+  async send({ channel, to, message, mediaUrl, accountId, threadId, idempotencyKey }) {
     const key = idempotencyKey || `a2h_${crypto.randomUUID()}`;
     const params = { channel, to, idempotencyKey: key };
     if (message) params.message = message;
     if (mediaUrl) params.mediaUrl = mediaUrl;
-    if (imageKey) params.imageKey = imageKey;
     if (accountId) params.accountId = accountId;
     if (threadId) params.threadId = threadId;
     return this._request("send", params);
