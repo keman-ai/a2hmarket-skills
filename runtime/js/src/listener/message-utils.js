@@ -78,6 +78,8 @@ function formatSystemEventText(event) {
     lines.push(`[收款二维码]: ${imageUrl}`);
   }
 
+  lines.push("", `event_id: ${event.event_id}`, `inbox get --event-id ${event.event_id}`);
+
   return lines.join("\n");
 }
 

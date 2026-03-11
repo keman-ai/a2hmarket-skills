@@ -491,26 +491,26 @@ test("enqueueSummaryOutbox prevents duplicate entries for same event_id", () => 
   const store = new EventStore(temp.dbPath).open();
 
   try {
-    const first = store.enqueueSummaryOutbox({
+    const first = store.enqueueMediaOutbox({
       eventId: "evt-summary-1",
       sessionKey: "agent:main:feishu:direct:ou_abc",
       channel: "feishu",
       to: "ou_abc",
       accountId: null,
       threadId: null,
-      summaryText: "第一次摘要",
+      messageText: "第一次摘要",
     });
 
     assert.equal(first.inserted, true);
 
-    const second = store.enqueueSummaryOutbox({
+    const second = store.enqueueMediaOutbox({
       eventId: "evt-summary-1",
       sessionKey: "agent:main:feishu:direct:ou_abc",
       channel: "feishu",
       to: "ou_abc",
       accountId: null,
       threadId: null,
-      summaryText: "重复入队",
+      messageText: "重复入队",
     });
 
     assert.equal(second.inserted, false);
@@ -528,23 +528,23 @@ test("listPendingSummaryOutbox returns only pending and retry rows ready to disp
   try {
     const now = Date.now();
 
-    store.enqueueSummaryOutbox({
+    store.enqueueMediaOutbox({
       eventId: "evt-pending",
       channel: "feishu",
       to: "ou_1",
-      summaryText: "摘要1",
+      messageText: "摘要1",
     });
-    store.enqueueSummaryOutbox({
+    store.enqueueMediaOutbox({
       eventId: "evt-future",
       channel: "feishu",
       to: "ou_2",
-      summaryText: "摘要2",
+      messageText: "摘要2",
     });
     // Mark evt-future as retry with future deadline
-    const rows = store.listPendingSummaryOutbox({ now: now + 1, batchSize: 10 });
+    const rows = store.listPendingMediaOutbox({ now: now + 1, batchSize: 10 });
     const futureRow = rows.find((r) => r.event_id === "evt-future");
     if (futureRow) {
-      store.markSummaryRetry({
+      store.markMediaRetry({
         outboxId: futureRow.id,
         attempt: 1,
         nextRetryAt: now + 999999,
@@ -552,7 +552,7 @@ test("listPendingSummaryOutbox returns only pending and retry rows ready to disp
       });
     }
 
-    const pending = store.listPendingSummaryOutbox({ now: now + 1, batchSize: 10 });
+    const pending = store.listPendingMediaOutbox({ now: now + 1, batchSize: 10 });
     const ids = pending.map((r) => r.event_id);
     assert.ok(ids.includes("evt-pending"));
     assert.ok(!ids.includes("evt-future"));
@@ -567,18 +567,18 @@ test("markSummarySent transitions status to SENT", () => {
   const store = new EventStore(temp.dbPath).open();
 
   try {
-    store.enqueueSummaryOutbox({
+    store.enqueueMediaOutbox({
       eventId: "evt-to-send",
       channel: "feishu",
       to: "ou_send",
-      summaryText: "摘要",
+      messageText: "摘要",
     });
 
-    const [row] = store.listPendingSummaryOutbox({ now: Date.now() + 1, batchSize: 5 });
+    const [row] = store.listPendingMediaOutbox({ now: Date.now() + 1, batchSize: 5 });
     assert.ok(row);
-    store.markSummarySent({ outboxId: row.id });
+    store.markMediaSent({ outboxId: row.id });
 
-    const remaining = store.listPendingSummaryOutbox({ now: Date.now() + 1, batchSize: 5 });
+    const remaining = store.listPendingMediaOutbox({ now: Date.now() + 1, batchSize: 5 });
     assert.equal(remaining.length, 0);
   } finally {
     store.close();

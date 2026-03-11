@@ -18,10 +18,18 @@ async function pull({
   maxEvents,
   waitMs,
   pollIntervalMs,
+  sourceSessionKey,
 }) {
   const store = new EventStore(resolveDbPath(dbPath)).open();
   try {
     const normalizedConsumer = String(consumerId || "default");
+    const normalizedSourceSessionKey = String(sourceSessionKey || "").trim();
+    const isOpenClaw = normalizedConsumer === "openclaw";
+
+    if (isOpenClaw && !normalizedSourceSessionKey) {
+      throw new Error("pull for openclaw consumer requires source_session_key");
+    }
+
     const normalizedCursor = coerceInt(cursor, 0, 0);
     const normalizedLimit = coerceInt(maxEvents, 20, 1, 200);
     const normalizedWait = coerceInt(waitMs, 0, 0, 300000);
@@ -36,11 +44,27 @@ async function pull({
       });
 
       if (events.length > 0) {
+        let routeBoundCount = 0;
+        if (isOpenClaw && normalizedSourceSessionKey) {
+          for (const ev of events) {
+            if (ev.peer_id) {
+              const bound = store.bindPeerSessionForEvent({
+                eventId: ev.event_id,
+                sessionKey: normalizedSourceSessionKey,
+                sessionId: null,
+                source: "openclaw",
+                updatedAt: ev.msg_ts || nowMs(),
+              });
+              if (bound && bound.updated === true) routeBoundCount += 1;
+            }
+          }
+        }
         return {
           ok: true,
           consumer_id: normalizedConsumer,
           cursor: events[events.length - 1].seq,
           events,
+          route_bound_count: routeBoundCount,
         };
       }
 
@@ -50,6 +74,7 @@ async function pull({
           consumer_id: normalizedConsumer,
           cursor: normalizedCursor,
           events: [],
+          route_bound_count: 0,
         };
       }
 
@@ -107,10 +132,24 @@ async function ack({
       throw new Error("event_id is required");
     }
 
+    const isOpenClaw = normalizedConsumer === "openclaw";
+    if (isOpenClaw && normalizedSourceSessionId && !normalizedSourceSessionKey) {
+      throw new Error("ack for openclaw consumer requires source_session_key (not just source_session_id)");
+    }
+
+    const routeBinding =
+      isOpenClaw && normalizedSourceSessionKey
+        ? { sessionKey: normalizedSourceSessionKey, sessionId: null, source: "openclaw" }
+        : null;
+    // non-openclaw consumers are not authoritative for route binding
+    const nonAuthoritativeReason = !isOpenClaw && normalizedSourceSessionKey
+      ? "non_authoritative_consumer"
+      : null;
+
     const ackResult = store.ackEvent({
       consumerId: normalizedConsumer,
       eventId: normalizedEventId,
-      routeBinding: null,
+      routeBinding,
     });
     const ackedAt = ackResult.ackedAt;
 
@@ -155,7 +194,7 @@ async function ack({
     } else if (doNotify && ackResult.inserted !== true) {
       summarySkipReason = "already_acked";
     } else if (Boolean(notifyExternal) && !normalizedSummaryText && !normalizedMediaUrl) {
-      summarySkipReason = "no_notify_content";
+      summarySkipReason = "no_summary_text";
     }
 
     return {
@@ -163,6 +202,8 @@ async function ack({
       consumer_id: normalizedConsumer,
       event_id: normalizedEventId,
       acked_at: ackedAt,
+      route_bound: nonAuthoritativeReason ? false : ackResult.routeBound,
+      route_bind_reason: nonAuthoritativeReason || ackResult.routeBindReason || undefined,
       summary_enqueued: summaryEnqueued,
       summary_skip_reason: summarySkipReason || undefined,
       media_url_auto_filled: !String(mediaUrl || "").trim() && Boolean(normalizedMediaUrl),

@@ -25,7 +25,7 @@
     "a2a": "node ./bin/a2hmarket.js a2a"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "mqtt": "^5.15.0",

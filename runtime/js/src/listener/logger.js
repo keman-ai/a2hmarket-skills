@@ -1,15 +1,38 @@
+const _tz = process.env.TZ || "Asia/Shanghai";
+
+const _dtfParts = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: _tz,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  fractionalSecondDigits: 3,
+  hour12: false,
+});
+
+const _dtfOffset = new Intl.DateTimeFormat("en-GB", {
+  timeZone: _tz,
+  timeZoneName: "longOffset",
+});
+
+function _getOffsetStr() {
+  for (const { type, value } of _dtfOffset.formatToParts(new Date())) {
+    if (type === "timeZoneName") {
+      // value is like "GMT+08:00" or "GMT"
+      return value.replace("GMT", "") || "+00:00";
+    }
+  }
+  return "+00:00";
+}
+
 function nowIso() {
-  const now = new Date();
-  const utc8Ms = now.getTime() + (8 * 60 * 60 * 1000);
-  const beijing = new Date(utc8Ms);
-  const year = beijing.getUTCFullYear();
-  const month = String(beijing.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(beijing.getUTCDate()).padStart(2, '0');
-  const hours = String(beijing.getUTCHours()).padStart(2, '0');
-  const minutes = String(beijing.getUTCMinutes()).padStart(2, '0');
-  const seconds = String(beijing.getUTCSeconds()).padStart(2, '0');
-  const ms = String(beijing.getUTCMilliseconds()).padStart(3, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}+08:00`;
+  const parts = _dtfParts.formatToParts(new Date());
+  const p = {};
+  for (const { type, value } of parts) p[type] = value;
+  const offset = _getOffsetStr();
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}.${p.fractionalSecond}${offset}`;
 }
 
 function createLogger(verbose) {

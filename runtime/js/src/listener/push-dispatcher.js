@@ -2,13 +2,7 @@ const { nowMs } = require("../store/event-store");
 const { MAIN_SESSION_KEY, resolvePushSession, parseDeliveryHintsFromSessionKey } = require("../config/openclaw-routing");
 const { formatSystemEventText, formatDirectPushText, extractImageUrl, coerceInt } = require("./message-utils");
 const { scrubSessionRefs } = require("../utils/session-ref");
-
-function calculateBackoffMs(attempt, maxDelayMs) {
-  const normalizedAttempt = Math.max(1, Math.min(10, coerceInt(attempt, 1)));
-  const base = 1000 * 2 ** (normalizedAttempt - 1);
-  const capped = Math.min(base, coerceInt(maxDelayMs, 5 * 60 * 1000));
-  return Math.max(1000, capped);
-}
+const { calculateBackoffMs } = require("./backoff");
 
 async function runGatewayPush(gatewayClient, text, options) {
   const resolved = (options && options.resolvedSession) || {

@@ -555,12 +555,12 @@ test("inbox ack with notify-external uses explicit channel/to over session key p
     // Verify the queued record used explicit channel/to
     const verifyStore = new EventStore(temp.dbPath).open();
     try {
-      const rows = verifyStore.listPendingSummaryOutbox({ now: Date.now() + 1, batchSize: 5 });
+      const rows = verifyStore.listPendingMediaOutbox({ now: Date.now() + 1, batchSize: 5 });
       assert.equal(rows.length, 1);
       assert.equal(rows[0].channel, "feishu");
       assert.equal(rows[0].to_target, "ou_override_user");
       assert.equal(rows[0].account_id, "acc123");
-      assert.equal(rows[0].summary_text, "摘要");
+      assert.equal(rows[0].message_text, "摘要");
     } finally {
       verifyStore.close();
     }
@@ -608,11 +608,11 @@ test("inbox ack with notify-external and media-url enqueues summary with media_u
 
     const verifyStore = new EventStore(temp.dbPath).open();
     try {
-      const rows = verifyStore.listPendingSummaryOutbox({ now: Date.now() + 1, batchSize: 5 });
+      const rows = verifyStore.listPendingMediaOutbox({ now: Date.now() + 1, batchSize: 5 });
       assert.equal(rows.length, 1);
       assert.equal(rows[0].channel, "feishu");
       assert.equal(rows[0].to_target, "ou_media");
-      assert.equal(rows[0].summary_text, "订单确认，请扫码支付");
+      assert.equal(rows[0].message_text, "订单确认，请扫码支付");
       assert.equal(rows[0].media_url, "https://qr.example.com/pay.png");
     } finally {
       verifyStore.close();
@@ -661,10 +661,10 @@ test("inbox ack with only media-url (no summary-text) still enqueues when notify
 
     const verifyStore = new EventStore(temp.dbPath).open();
     try {
-      const rows = verifyStore.listPendingSummaryOutbox({ now: Date.now() + 1, batchSize: 5 });
+      const rows = verifyStore.listPendingMediaOutbox({ now: Date.now() + 1, batchSize: 5 });
       assert.equal(rows.length, 1);
       assert.equal(rows[0].media_url, "https://qr.example.com/pay2.png");
-      assert.equal(rows[0].summary_text, "");
+      assert.equal(rows[0].message_text, "");
     } finally {
       verifyStore.close();
     }

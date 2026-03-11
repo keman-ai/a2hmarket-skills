@@ -84,6 +84,23 @@ function fallbackRoute(options) {
   };
 }
 
+function pickChannelSession(sessions) {
+  const list = (Array.isArray(sessions) ? sessions : [])
+    .filter((s) => {
+      const key = String((s && s.key) || "").trim();
+      return key && parseDeliveryHintsFromSessionKey(key) !== null;
+    })
+    .sort((a, b) => {
+      const aKey = String((a && a.key) || "").toLowerCase();
+      const bKey = String((b && b.key) || "").toLowerCase();
+      const aFeishu = aKey.includes("feishu") ? 1 : 0;
+      const bFeishu = bKey.includes("feishu") ? 1 : 0;
+      if (aFeishu !== bFeishu) return bFeishu - aFeishu;
+      return Number(b.updatedAt || 0) - Number(a.updatedAt || 0);
+    });
+  return list.length > 0 ? list[0] : null;
+}
+
 function pickSourceSession(options) {
   const sessions = Array.isArray(options && options.sessions) ? options.sessions : [];
   const explicit = pickSessionByIdentity(sessions, {
@@ -102,14 +119,29 @@ function pickSourceSession(options) {
     };
   }
 
+  const nowMs = options && options.nowMs;
+  const maxAgeMs = options && options.maxAgeMs;
+
   const latest = pickLatestSession(sessions, {
-    nowMs: options && options.nowMs,
-    maxAgeMs: options && options.maxAgeMs,
+    nowMs,
+    maxAgeMs,
     excludeSessionKeys: [MAIN_SESSION_KEY],
   });
   if (latest) {
     return buildSessionRoute(latest, "latest-active");
   }
+
+  // Only consider channel sessions when no maxAgeMs staleness filter is active.
+  // If maxAgeMs is specified and latest-active returned nothing, all non-main
+  // sessions are too old → go straight to fallback.
+  const hasAgeFilter = Number.isFinite(Number(nowMs)) && Number.isFinite(Number(maxAgeMs)) && Number(maxAgeMs) >= 0;
+  if (!hasAgeFilter) {
+    const channel = pickChannelSession(sessions);
+    if (channel) {
+      return buildSessionRoute(channel, "channel-preferred");
+    }
+  }
+
   return fallbackRoute(options);
 }
 
@@ -156,6 +188,7 @@ module.exports = {
   listOpenclawSessions,
   pickSessionByIdentity,
   pickLatestSession,
+  pickChannelSession,
   pickSourceSession,
   resolvePushSession,
   parseDeliveryHintsFromSessionKey,
