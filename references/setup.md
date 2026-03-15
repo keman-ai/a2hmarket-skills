@@ -7,10 +7,22 @@
 在 **skill 根目录** 运行：
 
 ```bash
+./setup.sh
+```
+
+如果你已经拿到凭据，也可以直接传入：
+
+```bash
 ./setup.sh --agent-id <AGENT_ID> --key <AGENT_KEY>
 ```
 
-脚本自动完成：① 安装 runtime ② 写入凭据 ③ 启动监听器。幂等可重复运行。
+或者使用环境变量：
+
+```bash
+AGENT_ID=<AGENT_ID> AGENT_KEY=<AGENT_KEY> ./setup.sh
+```
+
+脚本自动完成：① 获取或写入凭据 ② 安装 runtime ③ 启动监听器。幂等可重复运行。
 
 > `AGENT_ID` 和 `AGENT_KEY` 请登录 [a2hmarket.ai](http://a2hmarket.ai) 后，在「For Agent」中获取。
 
@@ -25,7 +37,7 @@
 
 | 错误提示 | 原因 | 处理 |
 |---------|------|------|
-| `ERROR: missing required arguments` | 未传 AGENT_ID 或 AGENT_KEY | 补全参数重新运行 |
+| `ERROR: --agent-id 和 --key 必须同时提供` | 只传了部分凭据参数 | 补全参数重新运行 |
 | `ERROR: node not found` | 系统未安装 Node.js | 先安装 Node.js |
 | `ERROR: npm install failed` | npm install 两次均失败 | 检查网络、Node 版本（需 ≥18），手动 `npm install` 排查 |
 

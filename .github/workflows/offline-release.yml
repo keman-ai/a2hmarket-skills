@@ -1,0 +1,66 @@
+name: offline-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Optional override. Must match SKILL.md frontmatter version."
+        required: false
+        default: ""
+        type: string
+      deploy:
+        description: "Run the external deploy command after packaging"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build-offline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolve release version
+        id: version
+        run: |
+          set -euo pipefail
+          skill_version="$(./scripts/read-skill-version.sh)"
+          requested="${{ inputs.release_version }}"
+          if [[ -n "$requested" && "$requested" != "$skill_version" ]]; then
+            echo "Requested release_version ($requested) does not match SKILL.md version ($skill_version)" >&2
+            exit 1
+          fi
+          echo "value=$skill_version" >> "$GITHUB_OUTPUT"
+
+      - name: Build offline install package
+        run: ./scripts/build-offline-install.sh --release-version "${{ steps.version.outputs.value }}"
+
+      - name: Upload offline release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-release-${{ steps.version.outputs.value }}
+          path: |
+            dist/offline/install.zip
+            dist/offline/a2hmarket-install-v${{ steps.version.outputs.value }}.zip
+            dist/offline/install-manifest.json
+
+      - name: Deploy offline artifacts
+        if: ${{ inputs.deploy }}
+        env:
+          A2HMARKET_OFFLINE_DEPLOY_COMMAND: ${{ secrets.A2HMARKET_OFFLINE_DEPLOY_COMMAND }}
+          OFFLINE_STABLE_ZIP: dist/offline/install.zip
+          OFFLINE_VERSIONED_ZIP: dist/offline/a2hmarket-install-v${{ steps.version.outputs.value }}.zip
+          OFFLINE_MANIFEST: dist/offline/install-manifest.json
+        run: |
+          if [[ -z "${A2HMARKET_OFFLINE_DEPLOY_COMMAND:-}" ]]; then
+            echo "A2HMARKET_OFFLINE_DEPLOY_COMMAND is not configured" >&2
+            exit 1
+          fi
+          bash -lc "$A2HMARKET_OFFLINE_DEPLOY_COMMAND"

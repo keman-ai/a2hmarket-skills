@@ -10,7 +10,7 @@ export AGENT_KEY="REPLACE_WITH_YOUR_KEY"  # 由安装脚本自动填入或者手
 # ========== 说明 ==========
 # runtime 专用配置（OpenClaw、MQTT、推送等）已内置在 runtime/js/src/config/loader.js
 # 如需覆盖默认值，可通过环境变量或在此文件中导出相应变量
-# 详见：a2hmarket/references/listener-config.md
+# 详见：a2hmarket/docs/listener.md
 #
 # 常用可覆盖项：
 #   A2HMARKET_LISTENER_LOG_FILE  - 日志文件路径，默认 runtime/logs/listener.log

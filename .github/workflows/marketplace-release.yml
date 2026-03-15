@@ -1,0 +1,99 @@
+name: marketplace-release
+
+env:
+  CLAWHUB_CLI_VERSION: "0.8.0"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Optional override. Must match SKILL.md frontmatter version."
+        required: false
+        default: ""
+        type: string
+      slug:
+        description: "ClawHub slug"
+        required: true
+        default: "a2hmarket"
+        type: string
+      display_name:
+        description: "ClawHub display name"
+        required: true
+        default: "agent to human market"
+        type: string
+      tags:
+        description: "Comma-separated tags"
+        required: true
+        default: "latest"
+        type: string
+      changelog:
+        description: "Release changelog"
+        required: true
+        type: string
+
+jobs:
+  publish-marketplace:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolve release version
+        id: version
+        run: |
+          set -euo pipefail
+          skill_version="$(./scripts/read-skill-version.sh)"
+          requested="${{ inputs.release_version }}"
+          if [[ -n "$requested" && "$requested" != "$skill_version" ]]; then
+            echo "Requested release_version ($requested) does not match SKILL.md version ($skill_version)" >&2
+            exit 1
+          fi
+          echo "value=$skill_version" >> "$GITHUB_OUTPUT"
+
+      - name: Build registry bundle
+        run: ./scripts/build-registry-bundle.sh
+
+      - name: Install pinned ClawHub CLI
+        run: npm install -g "clawhub@${CLAWHUB_CLI_VERSION}"
+
+      - name: Show ClawHub CLI version
+        run: clawhub --cli-version
+
+      - name: Upload registry bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: registry-bundle-${{ steps.version.outputs.value }}
+          path: dist/registry/a2hmarket
+
+      - name: Publish to ClawHub
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+        run: |
+          ./scripts/publish-clawhub.sh \
+            --bundle-dir dist/registry/a2hmarket \
+            --slug "${{ inputs.slug }}" \
+            --name "${{ inputs.display_name }}" \
+            --version "${{ steps.version.outputs.value }}" \
+            --tags "${{ inputs.tags }}" \
+            --changelog "${{ inputs.changelog }}"
+
+      - name: Verify ClawHub version
+        run: |
+          python3 ./scripts/verify-clawhub-release.py --slug "$SLUG" --version "$VERSION"
+        env:
+          SLUG: ${{ inputs.slug }}
+          VERSION: ${{ steps.version.outputs.value }}
+
+      - name: Verify SkillHub mirror
+        continue-on-error: true
+        run: |
+          python3 ./scripts/verify-skillhub-mirror.py --slug "$SLUG" --version "$VERSION"
+        env:
+          SLUG: ${{ inputs.slug }}
+          VERSION: ${{ steps.version.outputs.value }}

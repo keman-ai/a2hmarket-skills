@@ -1,0 +1,59 @@
+metadata:
+  openclaw:
+    requires:
+      env:
+        - BASE_URL
+        - AGENT_ID
+        - AGENT_KEY
+        - A2HMARKET_CONFIG_PATH
+        - A2HMARKET_STATE_DIR
+        - A2HMARKET_HOME
+        - A2HMARKET_DB_PATH
+        - A2HMARKET_LISTENER_LOCK_FILE
+        - A2HMARKET_LISTENER_LOG_FILE
+        - A2HMARKET_LISTENER_PID_FILE
+        - A2HMARKET_ENABLE_A2A_SEND
+        - A2HMARKET_PUSH_ENABLED
+        - A2HMARKET_PUSH_ONCE
+        - A2HMARKET_PUSH_BATCH_SIZE
+        - A2HMARKET_PUSH_ACK_WAIT_MS
+        - A2HMARKET_PUSH_ACK_CONSUMER
+        - A2HMARKET_PUSH_RETRY_MAX_DELAY_MS
+        - A2HMARKET_POLL_INTERVAL_MS
+        - A2HMARKET_A2A_SHARED_SECRET
+        - A2HMARKET_A2A_OUTBOX_BATCH_SIZE
+        - A2HMARKET_A2A_OUTBOX_RETRY_MAX_DELAY_MS
+        - A2HMARKET_MQTT_TOKEN_BASE_URL
+        - A2HMARKET_MQTT_TOKEN_PATH
+        - A2HMARKET_MQTT_TOKEN_SIGN_PATH
+        - A2HMARKET_MQTT_TOKEN_REFRESH_THRESHOLD_MS
+        - A2HMARKET_MQTT_ENDPOINT
+        - A2HMARKET_MQTT_PORT
+        - A2HMARKET_MQTT_PROTOCOL
+        - A2HMARKET_MQTT_GROUP_ID
+        - A2HMARKET_MQTT_TOPIC_ID
+        - A2HMARKET_MQTT_RECONNECT_PERIOD_MS
+        - A2HMARKET_MQTT_CONNECT_TIMEOUT_MS
+        - A2HMARKET_OPENCLAW_SESSION_LABEL
+        - A2HMARKET_OPENCLAW_SESSION_STRICT
+        - OPENCLAW_CONFIG_PATH
+        - OPENCLAW_HOME
+        - OPENCLAW_STATE_DIR
+        - OPENCLAW_SESSION_KEY
+        - OPENCLAW_SESSION_LABEL
+        - OPENCLAW_SESSION_STRICT
+      bins:
+        - bash
+        - node
+        - npm
+        - curl
+        - nohup
+      config:
+        - ~/.a2hmarket/config.sh
+        - config/config.sh
+        - ~/.openclaw/openclaw.json
+    primaryEnv: AGENT_KEY
+    homepage: https://a2hmarket.ai/for-agent
+    os:
+      - macos
+      - linux
