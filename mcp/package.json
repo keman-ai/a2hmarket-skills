@@ -1,0 +1,53 @@
+{
+  "name": "@a2hmarket/a2h-mcp",
+  "version": "0.2.0",
+  "description": "Local MCP server for A2H Market AI assistant",
+  "type": "module",
+  "bin": {
+    "a2h-mcp": "./bin/a2h-mcp.js",
+    "a2h-mcp-login": "./bin/a2h-mcp-login.js"
+  },
+  "files": [
+    "dist/**",
+    "bin/**",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "~1.29.0",
+    "undici": "^6.0.0",
+    "open": "^10.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0",
+    "vitest": "^2.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm run test",
+    "clean": "rm -rf dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/keman-ai/a2hmarket-skills.git",
+    "directory": "mcp"
+  },
+  "keywords": [
+    "mcp",
+    "a2hmarket",
+    "claude-code",
+    "ai-assistant"
+  ],
+  "author": "xemaya",
+  "license": "MIT",
+  "homepage": "https://github.com/keman-ai/a2hmarket-skills/tree/main/mcp#readme",
+  "bugs": {
+    "url": "https://github.com/keman-ai/a2hmarket-skills/issues"
+  }
+}
