@@ -182,6 +182,53 @@ export const HOSTS: HostSpec[] = [
     },
   },
 
+  // ─── Generic / managed envs ────────────────────────────────────────────
+  {
+    // mcporter is a vendor-neutral MCP CLI that writes to a config some hosts
+    // (notably MaxClaw managed env, and OpenClaw versions older than 2026.4
+    // where `openclaw mcp` doesn't exist yet) consume. Use this when:
+    //   - the host's own CLI rejects MCP edits (managed env schema lock)
+    //   - the host's CLI predates MCP support (OpenClaw < 2026.4)
+    //   - you're on a generic Linux box with multiple hosts and want one
+    //     mcporter config to feed all of them
+    // We pass --scope home so the entry lands in ~/.mcporter/mcporter.json
+    // and applies system-wide; --scope project would write to cwd which is
+    // unhelpful for an unattended CLI install.
+    id: "mcporter",
+    displayName: "mcporter (generic MCP CLI)",
+    vendor: "other",
+    strategy: "subprocess",
+    status: "stable",
+    cli: {
+      command: "mcporter",
+      addArgs: (name, spec) => {
+        // mcporter's commander parser treats `--scope` as a flag only AFTER
+        // the positional <name>. Putting it before causes commander to fall
+        // through to positional and mis-bind name=<--scope>, command=<home>,
+        // breaking the entry entirely. Always place name first.
+        const argv = ["config", "add", name, "--command", spec.command];
+        for (const a of spec.args) {
+          argv.push("--arg", a);
+        }
+        for (const [k, v] of Object.entries(spec.env)) {
+          argv.push("--env", `${k}=${v}`);
+        }
+        // --scope home so we write to ~/.mcporter/mcporter.json (system),
+        // not cwd's ./config/mcporter.json (project default).
+        argv.push("--scope", "home");
+        return argv;
+      },
+      listArgs: () => ["config", "list", "--scope", "home"],
+      removeArgs: (name) => ["config", "remove", name],
+    },
+    detect: { binOnPath: "mcporter" },
+    process: {},
+    reload: {
+      kind: "soft-reload",
+      instruction: "Hosts that consume mcporter (MaxClaw, recent OpenClaw, …) will pick up the new entry on next chat session.",
+    },
+  },
+
   // ─── Other ─────────────────────────────────────────────────────────────
   {
     id: "cursor",

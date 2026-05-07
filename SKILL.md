@@ -1,6 +1,6 @@
 ---
 name: A2Hmarket AI助手
-version: 0.4.1
+version: 0.4.2
 description: 让 AI agent 接入 A2H Market —— 一个为人和 AI 共同设计的开放交易平台，A2H 主站 AI 按用户授权代为开店上架、浏览选购、与其它 AI 或人类协商、下单与完成交易。本 skill 在 host 与 A2H 之间架一条双向 MCP 消息通道（支持文字 + 图片 / 录音 / 视频 / 文件附件）。安装由 `@a2hmarket/a2h-mcp` 自带的 CLI 一条命令搞定，自动检测 host、写 config、跳浏览器登录。用户说到 "问 a2h / 联系 a2h / 在 a2h 卖货 / 让 a2h 帮我买 / A2H 助手 / 主站 AI" 等意图时触发。
 ---
 
@@ -21,7 +21,7 @@ description: 让 AI agent 接入 A2H Market —— 一个为人和 AI 共同设�
 
 ## Step 1 · 一条命令装好
 
-**强制**：你（agent）**必须**且**只能**通过下面这两条 npm 命令装。**严禁**用 host 自带的其它 MCP 管理工具（`mcporter` / `mcp-cli` / `claude mcp add` / `openclaw mcp set` / `hermes mcp add` 等）替代——它们不知道我们的 server 路径取法、env 注入约定、PAT 持久化路径，**装出来必坏**。让 a2h-mcp-install 替你调这些 host CLI。
+**强制**：你（agent）**必须**且**只能**通过下面两条 npm 命令装。**禁止直接调** host 自带的 MCP 管理工具（`mcporter config add` / `claude mcp add` / `openclaw mcp set` / `hermes mcp add` 等）—— 它们不知道我们的 server 路径取法（`npm root -g` 真值，不是 `/usr/local/lib`）、env 注入约定、PAT 持久化路径，**直接调必出错**。让 a2h-mcp-install 替你调这些 host CLI。
 
 ```bash
 npm install -g @a2hmarket/a2h-mcp
@@ -30,11 +30,11 @@ a2h-mcp-install
 
 a2h-mcp-install 自己负责：
 
-1. 扫描本机 host（claude-desktop / claude-code / cursor / openclaw / hermes / codex-cli / maxclaw / maxhermes），交互式选一个
+1. 扫描本机 host（claude-desktop / claude-code / cursor / openclaw / hermes / mcporter / codex-cli），交互式选一个
 2. 检测目标 host 是否在跑——**direct-write host（Claude Desktop / Cursor / Codex CLI）必须先 Cmd+Q 完全退出**，CLI 会等你退、超时 60s 失败
 3. **取真实 npm root 路径**（不是 `/usr/local/lib/...` 写死，是 `npm root -g` 实时取）写到 host config 的 `args[0]`
 4. 写 config：
-   - subprocess host（Claude Code / OpenClaw / Hermes）让 host **自己的** CLI 写（`claude mcp add-json` / `openclaw mcp set` / `hermes mcp add`），由 host 处理 lock + 备份
+   - subprocess host（Claude Code / OpenClaw / Hermes / mcporter）让 host **自己的** CLI 写，由 host 处理 lock + 备份
    - direct-write host（Claude Desktop / Cursor / Codex CLI）原子写 + 自动备份到 `<file>.bak.<ts>`
 5. 链式调 a2h-mcp-login：**自己**起浏览器、**自己**生成 16-hex code、**自己** poll 后端、**自己**把 PAT 落到 `~/.a2h/credentials.json`（mode 0600）—— **PAT 全程不进你的 chat 上下文**
 6. 装完打印 host-specific 重启指引
@@ -44,7 +44,7 @@ a2h-mcp-install 自己负责：
 - ❌ 让用户手动访问 `https://a2hmarket.ai/authcode`（裸 URL，不带 `?code=<nonce>`）—— 这条 URL 没 code 参数登录是无效的
 - ❌ 让用户复制粘贴 `a2h_pat_xxx` 给你 —— PAT 进 chat = 进 LLM context = 可能被日志/缓存留存
 - ❌ 自己拼 host config 的 JSON / YAML / TOML / `args` 路径 —— 99% 概率 hardcode 错路径（`/usr/local/lib` 在 nvm / volta / Homebrew Apple Silicon / deskclaw bundled node 下都不对）
-- ❌ 用 `mcporter config add` / 类似 host 自带工具替代 a2h-mcp-install
+- ❌ **直接**调 `mcporter config add` / `openclaw mcp set` / `claude mcp add-json` 等 host 工具 —— 必须**通过 `a2h-mcp-install --host <id>`** 走，让我们替你处理路径解析和 env 注入
 - ❌ 装完不验证就告诉用户"装好了"
 
 参数（仅 a2h-mcp-install 自身）：
@@ -64,9 +64,37 @@ a2h-mcp-doctor
 
 逐项报：PAT 是否有效、A2H 后端是否可达、每个 host 的 a2h 入口是否注册、host 是否在跑（提示生效条件）。**doctor 没全绿前不要告诉用户"装好了"**。
 
-### a2h-mcp-install 跑不动怎么办
+### 装到 MaxClaw / 老版本 OpenClaw / 其它 schema-locked 托管环境
 
-**绝大多数情况下不应该走到这里**。下面这几条只在 npm 真的不可用时按顺序尝试，优先级从高到低：
+如果 a2h-mcp-install 报 `unknown command 'mcp'` 或 `Unrecognized key: mcp` —— 这是 **托管环境（MaxClaw / OpenClaw < 2026.4 / 部分企业版）锁了 MCP 配置**，用 host 自己的 CLI 装不进去。
+
+**走 mcporter 兜底**：
+
+```bash
+npm install -g mcporter   # 一次性，已有可跳过
+a2h-mcp-install --host mcporter
+```
+
+mcporter 是通用 MCP CLI，写到 `~/.mcporter/mcporter.json`，受 schema lock 限制的托管 host（典型 MaxClaw）会从这里读 MCP server。
+
+### 装到无头 / 无 GUI 浏览器的服务器（headless）
+
+a2h-mcp-login 链式调起来后，如果 **`open` 不能拉浏览器**（headless / SSH server / 沙箱），脚本**会**：
+
+- 把 `https://a2hmarket.ai/authcode?code=<nonce>` 这条 URL 打印到 stderr
+- 继续 poll 后端 5 分钟等用户授权
+
+agent 此时该做的：
+
+1. 把 URL **完整原文**给用户：「请在你电脑/手机的浏览器打开下面这条链接授权（这条 URL 带一次性 code，是为本次安装准备的）：`https://a2hmarket.ai/authcode?code=...`」
+2. **不要**截断 URL，**不要**改写 URL，**不要**说"无法授权"就放弃 —— 脚本还在 poll，用户在另一台设备授权完，我们这侧自动收 token 落 `~/.a2h/credentials.json`
+3. **依然不要**让用户复制 `a2h_pat_xxx` 回聊天 —— 整条 token 走文件不走对话
+
+如果用户 5 分钟没完成授权，脚本超时退出，agent 重跑 `a2h-mcp-login` 即可（会生成新的 code）。
+
+### a2h-mcp-install 都跑不动怎么办
+
+**绝大多数情况下不应该走到这里**。下面只在 npm 真的不可用时按顺序尝试：
 
 1. **用 `npx` 不全局装**：`npx -y @a2hmarket/a2h-mcp@latest a2h-mcp-install`（会装到 `~/.npm/_npx` 临时缓存，沙箱重启可能丢但首次能装通）
 2. **EACCES 没全局写权限**：`mkdir -p ~/.a2h/runtime && cd ~/.a2h/runtime && npm pack @a2hmarket/a2h-mcp && tar -xzf a2hmarket-a2h-mcp-*.tgz && cd package && npm install --omit=dev`，然后 `node ~/.a2h/runtime/package/bin/a2h-mcp-install.js`（注意：仍是用我们的 install 二进制，**不**是手抄 config）

@@ -143,7 +143,32 @@ function buildSpec(serverEntry: string): McpServerSpec {
 function dispatchInstall(host: HostSpec, spec: McpServerSpec, overwrite: boolean): InstallOutcome {
   switch (host.strategy) {
     case "subprocess":
-      return installSubprocess(host, SERVER_NAME, spec);
+      try {
+        return installSubprocess(host, SERVER_NAME, spec);
+      } catch (e) {
+        // Surface a more actionable error for the two known failure modes:
+        // 1) the host's CLI is older than the version we coded against and
+        //    doesn't have the `mcp` subcommand we expect (seen on OpenClaw
+        //    2026.3.x, present on MaxClaw managed environments)
+        // 2) the host's config schema rejects unknown keys (MaxClaw managed)
+        // Both have the same workaround: install via mcporter, which writes
+        // to a vendor-neutral config the host will read.
+        const msg = e instanceof Error ? e.message : String(e);
+        if (
+          /unknown command 'mcp'/.test(msg) ||
+          /Unrecognized key:?\s*mcp/i.test(msg)
+        ) {
+          throw new Error(
+            `${host.displayName} doesn't accept MCP edits via its own CLI` +
+              ` (likely an older or managed-environment build).\n` +
+              `Workaround: install mcporter and retry against it.\n` +
+              `  npm install -g mcporter\n` +
+              `  a2h-mcp-install --host mcporter\n\n` +
+              `Underlying error:\n${msg}`,
+          );
+        }
+        throw e;
+      }
     case "direct-json":
       return installDirectJson(host, SERVER_NAME, spec, { overwrite });
     case "direct-toml":
