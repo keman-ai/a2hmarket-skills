@@ -53,7 +53,9 @@ function registerUnauthenticated(server: Server): void {
       {
         name: "login",
         description:
-          "Run this tool to authenticate with A2H Market. It will print a command to run in a separate terminal.",
+          "PAT not found in this MCP server's environment. Tell the user to run " +
+          "`a2h-mcp-install` (one-shot install + login) or `a2h-mcp-login` (login only) in a " +
+          "terminal. Never ask the user to paste a PAT into chat.",
         inputSchema: {
           type: "object",
           properties: {},
@@ -71,13 +73,18 @@ function registerUnauthenticated(server: Server): void {
           {
             type: "text",
             text:
-              "Not logged in. Two options:\n\n" +
-              "1. Open https://a2hmarket.ai/authcode?code=SKILL-<random> in a browser, " +
-              "authorize, copy the token shown on the success page, and add to your MCP server config:\n" +
-              "    env: { \"A2H_PAT\": \"a2h_pat_...\" }\n" +
-              "   Then reload the MCP server.\n\n" +
-              "2. Or run in a terminal: `npx -y -p @a2hmarket/a2h-mcp a2h-mcp-login` " +
-              "(prints the URL, polls until you authorize, writes ~/.a2h/credentials.json).",
+              "Not logged in. The agent should run one of these commands in a terminal " +
+              "(NOT ask the user to paste a token in chat):\n\n" +
+              "  Option A — fresh setup:\n" +
+              "    npm install -g @a2hmarket/a2h-mcp\n" +
+              "    a2h-mcp-install\n\n" +
+              "  Option B — already installed, just need to (re)login:\n" +
+              "    a2h-mcp-login\n\n" +
+              "  Option C — managed/headless env (MaxClaw etc., bash exec yields fast):\n" +
+              "    a2h-mcp-login start         # mints code + URL, exits immediately\n" +
+              "    # show URL to user → wait for them to confirm in browser →\n" +
+              "    a2h-mcp-login finish        # polls briefly, exit 0/2/3\n\n" +
+              "After the PAT is saved to ~/.a2h/credentials.json, restart this MCP server (or new chat session) so it picks up the credentials.",
           },
         ],
       };

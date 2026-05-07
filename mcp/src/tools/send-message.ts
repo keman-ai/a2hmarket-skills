@@ -9,8 +9,16 @@ export interface ToolContext {
 const descriptor = {
   name: "send_message_to_ai",
   description:
-    "Send a message (text + optional attachments) to the A2H AI assistant. " +
-    "Reply arrives asynchronously — wait for it via check_inbox.",
+    "Send a user message (text + optional attachments) to the A2H Market AI assistant. " +
+    "REPLY ARRIVES ASYNCHRONOUSLY — this call returns a messageId only; do NOT wait inside this call. " +
+    "Standard pattern: " +
+    "(1) if user's message has attachments, call upload_attachment for each first, collect the returned objects. " +
+    "(2) call send_message_to_ai with { content: <user's literal text>, attachments: [<uploaded objects>] }. " +
+    "(3) immediately start polling check_inbox every ~3s, up to ~40 times (~120s wall time); " +
+    "stop on first non-empty events. " +
+    "STRICT FIELD NAMES (not negotiable): use `content` (NOT message/text/body); use `attachments` (NOT files/media/uploads). " +
+    "Pass through the user's original wording in `content` — don't paraphrase or translate. " +
+    "Tell the user up front 'I'm asking the A2H assistant, expect 1–2 minutes' so the polling delay isn't surprising.",
   inputSchema: {
     type: "object" as const,
     properties: {

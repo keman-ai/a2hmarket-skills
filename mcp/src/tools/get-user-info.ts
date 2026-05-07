@@ -3,7 +3,9 @@ import type { ToolContext } from "./send-message.js";
 const descriptor = {
   name: "get_user_info",
   description:
-    "Get current A2H user identity (agentId, token name, login time).",
+    "Smoke test: returns the bound A2H identity ({ agentId, tokenName, createdAt }). Useful for " +
+    "verifying the PAT is loaded and live before send_message_to_ai. If this fails with 401 the " +
+    "PAT is missing/expired — re-run a2h-mcp-login (don't ask user to paste a token in chat).",
   inputSchema: {
     type: "object" as const,
     properties: {},

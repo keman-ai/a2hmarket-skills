@@ -39,7 +39,9 @@ export const HOSTS: HostSpec[] = [
     mcpKeyPath: ["mcpServers"],
     detect: { configExists: true },
     process: {
-      pgrepPattern: "Claude\\.app/Contents/MacOS/Claude",
+      // pgrep treats this as an extended regex on both macOS and Linux
+      // (procps 3.3+). macOS literal first, then Linux AppImage variant.
+      pgrepPattern: "Claude\\.app/Contents/MacOS/Claude|claude-desktop",
       quitInstruction: "Cmd+Q in the Claude menu (closing the window is not enough)",
     },
     reload: {
@@ -244,8 +246,10 @@ export const HOSTS: HostSpec[] = [
     mcpKeyPath: ["mcpServers"],
     detect: { configExists: true },
     process: {
-      pgrepPattern: "Cursor\\.app/Contents/MacOS/Cursor",
-      quitInstruction: "Quit Cursor completely (Cmd+Q).",
+      // macOS literal first, then Linux variants (Cursor ships as
+      // electron AppImage / extracted to a path containing `cursor`).
+      pgrepPattern: "Cursor\\.app/Contents/MacOS/Cursor|/usr/share/cursor/cursor|cursor\\.AppImage",
+      quitInstruction: "Quit Cursor completely (Cmd+Q on macOS, Quit from menu on Linux).",
     },
     reload: {
       kind: "hard-restart",

@@ -1,4 +1,5 @@
 import { request } from "undici";
+import { randomBytes } from "node:crypto";
 
 /**
  * HTTP client talking to a2hmarket-concierge. Sends JSON + Bearer PAT.
@@ -112,7 +113,9 @@ export class A2hApiClient {
     originalName: string;
   }> {
     const url = `${this.base}/api/v1/agent/uploads`;
-    const boundary = `----a2hmcp${Date.now()}${Math.random().toString(16).slice(2)}`;
+    // Cryptographically random boundary so attachment bytes can never
+    // accidentally (or adversarially) collide with the multipart delimiter.
+    const boundary = `----a2hmcp${randomBytes(16).toString("hex")}`;
     const parts: Array<Buffer | Uint8Array> = [];
     const enc = (s: string) => Buffer.from(s, "utf-8");
 

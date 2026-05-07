@@ -1,6 +1,70 @@
-import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { basename, resolve as resolvePath } from "node:path";
+import { homedir } from "node:os";
 import type { ToolContext } from "./send-message.js";
+
+/**
+ * Hard cap on attachment size. Server multipart limit is ~20MB; we enforce
+ * client-side too so `readFile` doesn't pull a multi-GB file into memory
+ * before the server even gets a chance to reject it.
+ */
+const MAX_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Paths the agent is NEVER allowed to read via `upload_attachment`,
+ * regardless of how the input is shaped. The threat is prompt injection:
+ * an adversarial chat message instructs our agent to upload a sensitive
+ * file (the user's PAT, SSH keys, AWS creds, etc.). Even though the MCP
+ * server runs as the user and could theoretically open these files, this
+ * specific tool path is reserved for user-supplied attachments only.
+ *
+ * Order:
+ *   1. Resolve the path (collapses `..`, `~`, symlinks-in-name, etc.) so a
+ *      crafted relative path like `~/.a2h/../../etc/shadow` can't dodge.
+ *   2. Match against the denylist patterns. Any prefix match denies.
+ *
+ * If you legitimately need to upload from one of these locations, copy the
+ * file to `/tmp/` or `~/Downloads/` first and pass that path.
+ */
+const DENY_PREFIXES_LITERAL = [
+  // Our own credentials.
+  resolvePath(homedir(), ".a2h"),
+  // SSH / GPG / age private keys.
+  resolvePath(homedir(), ".ssh"),
+  resolvePath(homedir(), ".gnupg"),
+  resolvePath(homedir(), ".age"),
+  // Cloud provider credentials.
+  resolvePath(homedir(), ".aws"),
+  resolvePath(homedir(), ".azure"),
+  resolvePath(homedir(), ".config", "gcloud"),
+  // Package manager auth (npm, pypi, ruby gems).
+  resolvePath(homedir(), ".npmrc"),
+  resolvePath(homedir(), ".pypirc"),
+  resolvePath(homedir(), ".gem", "credentials"),
+  // Generic `.netrc` (used by curl, git, hg for HTTP basic auth).
+  resolvePath(homedir(), ".netrc"),
+  // Shell histories (often contain pasted secrets).
+  resolvePath(homedir(), ".bash_history"),
+  resolvePath(homedir(), ".zsh_history"),
+  resolvePath(homedir(), ".python_history"),
+  // Linux secrets.
+  "/etc/shadow",
+  "/etc/sudoers",
+  "/etc/ssh",
+  "/proc",
+  "/sys",
+  // macOS keychain.
+  resolvePath(homedir(), "Library", "Keychains"),
+];
+
+function isPathDenied(absPath: string): string | null {
+  for (const deny of DENY_PREFIXES_LITERAL) {
+    if (absPath === deny || absPath.startsWith(deny + "/")) {
+      return deny;
+    }
+  }
+  return null;
+}
 
 /**
  * `upload_attachment` MCP tool —— send images / audio / video / files to the
@@ -27,10 +91,17 @@ export const uploadAttachmentTool = {
   descriptor: {
     name: "upload_attachment",
     description:
-      "Upload a single file to A2H so it becomes an attachment with a public URL. " +
-      "Pass either { filePath } or { base64, mimeType, originalName }. " +
-      "Returns { url, mediaType, mimeType, fileSize, originalName } — paste " +
-      "the whole object into send_message_to_ai's `attachments` array.",
+      "Upload a single file to A2H so it becomes an attachment the AI can see. Call once per file " +
+      "BEFORE send_message_to_ai. Two input shapes: " +
+      "(1) { filePath: '/abs/path/to/x.png' } — when the host can write the file to disk. mimeType " +
+      "is optional; server infers from extension if omitted. " +
+      "(2) { base64: 'iVBORw0...', mimeType: 'image/png', originalName: 'x.png' } — when host " +
+      "exposes attachments inline. mimeType AND originalName are both required for base64. " +
+      "Returns { url, mediaType, mimeType, fileSize, originalName, ... } — paste the WHOLE object " +
+      "(not just url) into send_message_to_ai's `attachments` array. " +
+      "mediaType is auto-derived from mimeType (image/* → 1, audio/* → 2, video/* → 3, else 4); " +
+      "pass the mediaType arg to override. Single-file cap is ~20MB (server multipart limit); on " +
+      "413 / 'multipart too large' tell user to compress or split.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -77,11 +148,33 @@ export const uploadAttachmentTool = {
       typeof args.mediaType === "number" ? args.mediaType : undefined;
 
     if (filePath) {
-      bytes = new Uint8Array(await readFile(filePath));
+      // Resolve to absolute first so denylist comparison can't be dodged with
+      // relative paths or `..` segments. resolvePath() also collapses
+      // /a/b/../c → /a/c without touching the filesystem.
+      const abs = resolvePath(filePath);
+      const denyMatch = isPathDenied(abs);
+      if (denyMatch) {
+        throw new Error(
+          `upload_attachment: refusing to read sensitive path "${abs}" ` +
+            `(matches denylist entry "${denyMatch}"). If this is a legitimate file, ` +
+            `copy it to /tmp/ or ~/Downloads/ first.`,
+        );
+      }
+      const stats = await stat(abs);
+      if (!stats.isFile()) {
+        throw new Error(`upload_attachment: ${abs} is not a regular file`);
+      }
+      if (stats.size > MAX_BYTES) {
+        throw new Error(
+          `upload_attachment: file is ${stats.size} bytes, max is ${MAX_BYTES} ` +
+            `(20MB). Compress or split before uploading.`,
+        );
+      }
+      bytes = new Uint8Array(await readFile(abs));
       originalName =
         typeof args.originalName === "string" && args.originalName.trim().length > 0
           ? args.originalName
-          : basename(filePath);
+          : basename(abs);
       mimeType =
         typeof args.mimeType === "string" && args.mimeType.trim().length > 0
           ? args.mimeType
@@ -90,6 +183,11 @@ export const uploadAttachmentTool = {
       bytes = Uint8Array.from(Buffer.from(base64, "base64"));
       if (bytes.byteLength === 0) {
         throw new Error("upload_attachment: base64 decoded to empty bytes");
+      }
+      if (bytes.byteLength > MAX_BYTES) {
+        throw new Error(
+          `upload_attachment: base64 decoded to ${bytes.byteLength} bytes, max is ${MAX_BYTES} (20MB). Compress before uploading.`,
+        );
       }
       if (typeof args.originalName !== "string" || args.originalName.trim().length === 0) {
         throw new Error("upload_attachment: originalName is required when using base64");
