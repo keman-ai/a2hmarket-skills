@@ -114,6 +114,29 @@ describe("registry", () => {
     expect(argv[scopeIdx + 1]).toBe("user");
   });
 
+  it("claude-desktop pgrep matches both macOS and Linux process patterns", () => {
+    const cd = findHost("claude-desktop")!;
+    const pat = cd.process.pgrepPattern!;
+    const re = new RegExp(pat);
+    expect(
+      re.test("/Applications/Claude.app/Contents/MacOS/Claude --type=renderer"),
+    ).toBe(true);
+    expect(re.test("/usr/bin/claude-desktop --no-sandbox")).toBe(true);
+  });
+
+  it("cursor pgrep covers Linux variants too (was macOS-only before)", () => {
+    const cursor = findHost("cursor")!;
+    const pat = cursor.process.pgrepPattern!;
+    const re = new RegExp(pat);
+    expect(
+      re.test("/Applications/Cursor.app/Contents/MacOS/Cursor --type=gpu"),
+    ).toBe(true);
+    expect(re.test("/usr/share/cursor/cursor --no-sandbox")).toBe(true);
+    expect(re.test("/tmp/cursor.AppImage --no-sandbox")).toBe(true);
+    // Don't false-match unrelated processes that contain the substring "cursor".
+    expect(re.test("/usr/bin/postgres -D /var/lib/pg/cursor")).toBe(false);
+  });
+
   it("mcporter addArgs uses 'config add' with name first, repeatable --arg / --env, --scope home at end", () => {
     const mcp = findHost("mcporter")!;
     const argv = mcp.cli!.addArgs("a2h", {

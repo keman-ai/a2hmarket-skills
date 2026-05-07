@@ -87,7 +87,11 @@ export async function waitForHostQuit(
     onTick?.(Date.now() - start);
     await new Promise((r) => setTimeout(r, 1000));
   }
-  return !isHostRunning(host);
+  // Timeout. Don't re-check after the loop — that introduced a reverse race
+  // where a process that briefly died and restarted between the last in-loop
+  // check and the post-loop check would falsely flip the result. If we've
+  // timed out, treat the host as still running (safe default).
+  return false;
 }
 
 /** All hosts that detect as installed on this machine. */
