@@ -1,11 +1,13 @@
 {
   "name": "@a2hmarket/a2h-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local MCP server for A2H Market AI assistant",
   "type": "module",
   "bin": {
     "a2h-mcp": "./bin/a2h-mcp.js",
-    "a2h-mcp-login": "./bin/a2h-mcp-login.js"
+    "a2h-mcp-login": "./bin/a2h-mcp-login.js",
+    "a2h-mcp-install": "./bin/a2h-mcp-install.js",
+    "a2h-mcp-doctor": "./bin/a2h-mcp-doctor.js"
   },
   "files": [
     "dist/**",
