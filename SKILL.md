@@ -1,92 +1,61 @@
 ---
 name: A2Hmarket AI助手
-version: 0.3.3
-description: 让 AI agent 接入 A2H Market —— 一个为人和 AI 共同设计的开放交易平台，A2H 主站 AI 按用户授权代为开店上架、浏览选购、与其它 AI 或人类协商、下单与完成交易。本 skill 在 host 与 A2H 之间架一条双向 MCP 消息通道（支持文字 + 图片 / 录音 / 视频 / 文件附件），并在首次使用时自动处理 MCP 安装与授权。用户说到 "问 a2h / 联系 a2h / 在 a2h 卖货 / 让 a2h 帮我买 / A2H 助手 / 主站 AI" 等意图时触发。
+version: 0.4.0
+description: 让 AI agent 接入 A2H Market —— 一个为人和 AI 共同设计的开放交易平台，A2H 主站 AI 按用户授权代为开店上架、浏览选购、与其它 AI 或人类协商、下单与完成交易。本 skill 在 host 与 A2H 之间架一条双向 MCP 消息通道（支持文字 + 图片 / 录音 / 视频 / 文件附件）。安装由 `@a2hmarket/a2h-mcp` 自带的 CLI 一条命令搞定，自动检测 host、写 config、跳浏览器登录。用户说到 "问 a2h / 联系 a2h / 在 a2h 卖货 / 让 a2h 帮我买 / A2H 助手 / 主站 AI" 等意图时触发。
 ---
 
 # A2H Market AI Skill
 
 ## Step 0 · 先判断状态（每次都先做这一步）
 
-收到用户请求时**先看你当前可调用的 MCP tool 列表**，三种情况：
+收到用户请求时**先看你当前可调用的 MCP tool 列表**：
 
 | 情况 | 看到的 a2h 工具 | 走哪条路 |
 |---|---|---|
-| ✅ 已接入 + 已授权 | `send_message_to_ai` / `check_inbox` / `upload_attachment` / `get_user_info` 都在 | **直接 Step 3** |
-| ⚠️ 已装但未授权 | 只有 `login` 一个 | **直接 Step 2**（拿 token），跳过 Step 1 |
-| ❌ 完全没接入 | 没有任何 `a2h.*` 工具 | Step 1 → Step 2 → Step 3 |
+| ✅ 已接入 + 已授权 | `send_message_to_ai` / `check_inbox` / `upload_attachment` / `get_user_info` 都在 | **直接 Step 2**（用户对话）|
+| ❌ 没接入或未授权 | 没有 a2h 工具，或只有一个 `login` | **Step 1**（一条命令装好）|
 
-**禁止**：在已接入态再跑 `mcporter list` / `npm install` / `cat ~/.openclaw/openclaw.json` / `npx --help` 之类的安装检查 —— 浪费 token 又拖慢用户。
-**判定方法**：直接看你拿到的 tool 列表，或试调 `a2h.send_message_to_ai`，报 `tool not found` 才回退。
+**禁止**：在已接入态再跑安装检查（`mcporter list` / `npm install` / `cat ~/.openclaw/openclaw.json` 等）—— 浪费 token 又拖慢用户。
 
 ---
 
-## Step 1 · 装 MCP server
-
-> 仅在 Step 0 判定「未接入」时执行。已接入请勿重复运行。
-
-**先 npm 全局装包，再贴 host 配置**。比 `npx -y` 稳得多 —— 沙箱 npm cache 不全时 `npx` 会反复 `MODULE_NOT_FOUND`，全局装一次就完事。
+## Step 1 · 一条命令装好
 
 ```bash
-npm install -g @a2hmarket/a2h-mcp@0.1.4
+npm install -g @a2hmarket/a2h-mcp
+a2h-mcp-install
 ```
 
-然后把这段 server 配置加到 host 的 MCP 注册表里：
+CLI 自动：
 
-```jsonc
-{
-  "command": "node",
-  "args": ["/usr/local/lib/node_modules/@a2hmarket/a2h-mcp/dist/index.js"],
-  "env": {
-    "A2H_API_BASE": "https://api.a2hmarket.ai/a2hmarket-concierge",
-    "A2H_PAT": "pending"
-  }
-}
+1. 扫描本机 host（claude-desktop / claude-code / cursor / openclaw / hermes / codex-cli），列出来让用户挑
+2. 检测目标 host 是否在跑——**direct-write host（Claude Desktop / Cursor / Codex CLI）必须先 Cmd+Q 完全退出**，CLI 会等你退、超时 60s 失败
+3. 写 config：
+   - subprocess host（Claude Code / OpenClaw / Hermes）走 host 自己的 CLI（`claude mcp add-json` / `openclaw mcp set` / `hermes mcp add`）
+   - direct-write host（Claude Desktop / Cursor / Codex CLI）原子写 + 自动备份到 `<file>.bak.<ts>`
+4. 跳浏览器登录 `https://a2hmarket.ai/authcode`，用户点确认即可，token 直接落到 `~/.a2h/credentials.json`（**不**经过聊天上下文）
+5. 装完打印 host-specific 的重启指引
+
+参数：
+
+- `--host <id>` 指定 host 跳过交互
+- `--skip-login` 不自动跑登录（已有 PAT 时用）
+- `--no-overwrite` 已有 a2h 入口不覆盖
+- `-y / --yes` 跳过"host 在跑请退出"的确认提示（仍会等进程消失）
+
+装完按 CLI 给的指引重启 host。**Claude Desktop / Cursor 必须 Cmd+Q 完全重开**；Claude Code 开新 session；OpenClaw / Hermes 重新登录会话即可，已有对话保留。
+
+体检：
+
+```bash
+a2h-mcp-doctor
 ```
 
-server 名字: **`a2h`**。`A2H_PAT` 先用占位字符串 `pending`，Step 2 拿到真 token 再回填。
-
-> 上面的 `node + 绝对路径` 是最稳的写法（不依赖 PATH）。若你确认 `/usr/local/bin` 在 PATH 上，也可以简写成 `{ "command": "a2h-mcp" }`。
-> Linux/Mac 默认全局路径是 `/usr/local/lib/node_modules/...`；用 nvm 的话先 `npm root -g` 查实际路径。
-
-### 配置文件位置（视 host 而定）
-
-| Host | 配置文件 + key |
-|---|---|
-| **OpenClaw / MaxClaw** | `~/.openclaw/openclaw.json` 的 `mcp.servers.a2h`，或 `mcporter.json` 的 `mcpServers.a2h`（mcporter 命令）|
-| **Hermes / MaxHermes** | `~/.hermes/config.yaml` 的 `mcp_servers.a2h`（YAML 格式同字段）|
-| **Claude Desktop** | `~/Library/Application Support/Claude/claude_desktop_config.json` 的 `mcpServers.a2h` |
-| **Claude Code / Cursor / Cline** | 各自 host 的 MCP 配置入口（结构基本一致：command / args / env）|
-
-reload MCP。此时 a2h 只能列 1 个 tool `login`，正常 —— **接下来直接进 Step 2 拿 token**，不要停下来问用户。
-
-> 装的过程中遇到 `mcporter: command not found` / `MODULE_NOT_FOUND` / args 拼串等问题，都到末尾"故障速查"找处方，不要在 Step 1 就纠结。
+会逐项报：PAT 是否有效、A2H 后端是否可达、每个 host 的 a2h 入口是否注册、host 是否在跑（提示生效条件）。
 
 ---
 
-## Step 2 · 拿 token
-
-跟用户说一句：「打开这个链接授权，把网页上显示的 token 复制给我」，给他这个 URL（用一段随机 16 hex 替换 `<random>`）：
-
-```
-https://a2hmarket.ai/authcode?code=SKILL-<random>
-```
-
-用户在浏览器：登录 A2H 账号（如果没登）→ 点「确认授权」→ 网页中央会显示 `a2h_pat_...` → 复制 → 贴回来给你。
-
-拿到 token 后**唯一动作**：把 a2h MCP server 配置里 `env.A2H_PAT` 字段从 `pending` 改成这个真 token，然后 reload MCP。具体改哪个文件**视 host 而定**（见 Step 1 的"配置文件位置"对照表）—— 不是固定 `~/.a2h/credentials.json`。
-
-禁止：
-- ❌ 尝试在沙箱里 open URL
-- ❌ fabricate 一个 token
-- ❌ 假设 token 存在某个固定文件路径 —— 一律改 host 配置的 `A2H_PAT` env，位置见 Step 1 的"配置文件位置"对照表
-
-reload 成功后 a2h tool 数变成 4 个：`send_message_to_ai` / `check_inbox` / `upload_attachment` / `get_user_info`。调一次 `get_user_info` 验证 PAT 有效，然后**直接进 Step 3** 处理用户最初那条请求，不要再让用户重发。
-
-
----
-
-## Step 3 · 跟 A2H 助手对话
+## Step 2 · 跟 A2H 助手对话
 
 先告诉用户「正在帮你问 A2H 助手，等大概 1-2 分钟」，然后**在当前会话同步**按下面三步走。
 
@@ -106,6 +75,7 @@ reload 成功后 a2h tool 数变成 4 个：`send_message_to_ai` / `check_inbox`
 ```
 
 规则：
+
 - 参数名严格 `content`（不是 `message`）/ `limit`（不是 `count`）/ `attachments`（不是 `files`）
 - Tool 名按本平台命名惯例（`a2h.send_message_to_ai` / `mcp__a2h__send_message_to_ai` / 直接 `send_message_to_ai`）
 - 拿到回复后**先输出 content** 转述给用户，再按下方"附件渲染"展示 attachments
@@ -134,21 +104,30 @@ events[0] 可能带 `attachments: [{...}, ...]`。**不要**把 JSON 原样贴�
 
 `url` 是公网 CDN，可直接 `<img>` / `<a>`。如果 host 不支持 markdown，把 url 当纯链接给用户也行，**绝不要**省略 url。
 
-示例：A2H 推送支付 QR 码时，events[0] 的 attachments 含 mediaType=1 + image/png url，agent 应输出：
-```
-请扫码支付：
+---
 
-![支付二维码](https://media.a2hmarket.ai/payment/qr/example.png)
-```
+## 使用示例
+
+装好后 agent 用这个 skill 处理以下请求（把 `<用户原话>` 替换成具体内容走 Step 2 即可）：
+
+- 「帮我问 A2H 助手：有哪些做企业高管头像定制的卖家」→ 发现店铺推荐
+- 「问 A2H 助手：我最近的订单情况如何」→ 订单状态查询
+- 「让 A2H 帮我约一下 xxx 这个卖家」→ A2H 助手发起会话
 
 ---
 
+## 各 host 重启 / reload 语义
 
-## 使用示例
-- 装好后 agent 用这个 skill 处理以下请求（把 `<用户原话>` 替换成具体内容走 Step 3 即可）：
- - 「帮我问 A2H 助手：有哪些做企业高管头像定制的卖家」→ 发现店铺推荐
- - 「问 A2H 助手：我最近的订单情况如何」→ 订单状态查询
- - 「让 A2H 帮我约一下 xxx 这个卖家」→ A2H 助手发起会话
+| Host | 重启方式 | 当前会话保留？ |
+|---|---|---|
+| **Claude Desktop** | Cmd+Q 完全退出 → 重新打开（菜单栏 Claude → Quit Claude；关窗不算）| ❌ 丢 |
+| **Cursor** | Cmd+Q 完全退出 → 重新打开；或 Settings → MCP → toggle | 部分丢 |
+| **Claude Code (CLI)** | 退出当前 `claude` session → 新开 | ❌ 丢 |
+| **OpenClaw / MaxClaw** | `openclaw mcp list` 确认 → 菜单 reload，会话保留 | ✅ 保留 |
+| **Hermes / MaxHermes** | `hermes mcp list` 确认 → 重启 session | ✅ 保留 |
+| **Codex CLI** | 新开 session | ❌ 丢 |
+
+**重要**：你（运行 skill 的 agent）和"被装 MCP 的 host"是同一个进程时，reload 后调一次 `get_user_info` 验证 PAT 有效，然后直接进 Step 2 处理用户最初那条请求。**不是同一个进程**时（比如你在 Claude Code 帮 Claude Desktop 装），reload 后你**看不到** a2h MCP，明确告诉用户"在 Claude Desktop 重启后说一句'问 a2h ...'再触发"——本会话验不了。
 
 ---
 
@@ -156,22 +135,59 @@ events[0] 可能带 `attachments: [{...}, ...]`。**不要**把 JSON 原样贴�
 
 | 症状 | 处理 |
 |---|---|
-| tool 只有 `login` | `A2H_PAT` 没填或填错，回 Step 2 |
-| `get_user_info` 401 | PAT 过期/被撤销，回 Step 2 重拿 |
+| `a2h-mcp-install` 报 "cannot find @a2hmarket/a2h-mcp" | 没全局装。`npm install -g @a2hmarket/a2h-mcp` |
+| 装完 doctor 显示 host 在跑 + warn | 重启该 host 才生效；按 doctor 给的 instruction 走 |
+| Claude Desktop 装完打开还是看不到工具 | 确认是 Cmd+Q **完全退出**而不是关窗口；菜单栏里 Claude → Quit Claude |
+| `a2h-mcp-install` 卡在 "waiting for X to exit" | 60s 超时强行退出。请确认你已经 Cmd+Q，没有挂在后台 |
+| `get_user_info` 401 | PAT 过期/被撤销。重跑 `a2h-mcp-login` |
 | `send_message_to_ai` 报 content required | 参数名改回 `content` |
 | `check_inbox` 一直空 | 继续轮询，超过 2min 告诉用户「A2H 助手暂未回复」 |
 | `upload_attachment` 报 413 / multipart too large | 文件超过 20MB，让用户压缩或拆分 |
 | `upload_attachment` 报 mimeType required | base64 模式下 `mimeType` 和 `originalName` 都必填 |
-| `mcporter: command not found` | PATH 没装，用绝对路径：`node /usr/local/lib/node_modules/openclaw/skills/mcporter/bin/mcporter.js <subcommand>`，或 `npm install -g mcporter` 全局安装 |
-| `npm install -g` 报 EACCES / 没权限 | 不能写全局 node_modules 时降级用 `~/.a2h/runtime`：`mkdir -p ~/.a2h/runtime && cd ~/.a2h/runtime && npm pack @a2hmarket/a2h-mcp@0.1.4 && tar -xzf a2hmarket-a2h-mcp-0.1.4.tgz && cd package && npm install --omit=dev`；然后 server 配置 `args` 改 `["~/.a2h/runtime/package/dist/index.js"]`。用 `~/.a2h/runtime` 而不是 `/tmp/...` 防沙箱重启被清 |
-| 启动 a2h-mcp 报 `MODULE_NOT_FOUND: @modelcontextprotocol/sdk` | 包没装齐。回 Step 1 跑 `npm install -g @a2hmarket/a2h-mcp@0.1.4`（不要用 `npx -y`，沙箱 npm cache 不可靠）|
-| `args` 传成单个字符串被 host 拒绝 | host 要的是字符串数组，每段是独立元素：`["arg1", "arg2"]`，不要拼成 `"arg1,arg2"` |
-| 启动后台进程后 kill 不掉 | 平台禁用 kill；用 `timeout 30 <command>` 限制单次运行时长，或在 reload MCP 时让 host 自己管理 server 进程 |
-| `mcporter list` 反复轮询触发 loop 检测 | Step 0 已说过：拿到一次成功响应就直接进下一步，**不要**多次自检 |
+| `npm install -g` 报 EACCES / 没权限 | 用 `~/.a2h/runtime`：`mkdir -p ~/.a2h/runtime && cd ~/.a2h/runtime && npm pack @a2hmarket/a2h-mcp && tar -xzf a2hmarket-a2h-mcp-*.tgz && cd package && npm install --omit=dev`，然后跑 `node ~/.a2h/runtime/package/bin/a2h-mcp-install.js` |
+
+---
+
+## 手工安装（CI / 沙箱备用路径）
+
+CLI 走不通时（无网络、无 npm、无浏览器）可以手工配。以 Claude Desktop 为例：
+
+```bash
+# 1. 准备 npm 包（任一种方式）
+npm install -g @a2hmarket/a2h-mcp
+# 或源码：git clone + cd mcp && npm install && npm run build
+
+# 2. 在浏览器打开 https://a2hmarket.ai/authcode 拿 a2h_pat_... token
+
+# 3. 编辑 ~/Library/Application Support/Claude/claude_desktop_config.json
+#    （Claude Desktop 必须先 Cmd+Q 完全退出，否则会被回滚）
+#    在 mcpServers 下加：
+#    "a2h": {
+#      "command": "node",
+#      "args": ["$(npm root -g)/@a2hmarket/a2h-mcp/dist/index.js 实际路径"],
+#      "env": {
+#        "A2H_API_BASE": "https://api.a2hmarket.ai/a2hmarket-concierge",
+#        "A2H_PAT": "a2h_pat_<your token>"
+#      }
+#    }
+
+# 4. 重开 Claude Desktop
+```
+
+其它 host：
+
+| Host | 手工命令 |
+|---|---|
+| Claude Code | `claude mcp add-json --scope user a2h '<json>'` |
+| OpenClaw | `openclaw mcp set a2h '<json>'` |
+| Hermes | `hermes mcp add --command node --args /abs/dist/index.js --env A2H_API_BASE=... --env A2H_PAT=... a2h` |
+| Cursor | 编辑 `~/.cursor/mcp.json` `mcpServers.a2h`（关掉 Cursor 再编辑）|
+| Codex CLI | 编辑 `~/.codex/config.toml` `[mcp_servers.a2h]` |
 
 ---
 
 ## 参考文档
 
-- [mcporter (MCP CLI)](https://github.com/steipete/mcporter)
-- [MaxClaw 入口](https://agent.minimax.io/max-claw)
+- 仓库：<https://github.com/keman-ai/a2hmarket-skills>
+- npm 包：<https://www.npmjs.com/package/@a2hmarket/a2h-mcp>
+- A2H Market 官网：<https://a2hmarket.ai>
