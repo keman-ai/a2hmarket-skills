@@ -73,6 +73,10 @@ if [[ "$DRY_RUN" -eq 0 ]]; then
 fi
 
 info "triggering sync-skill-md on $DEPLOY_REPO"
+# Capture trigger time BEFORE the API call (5s buffer for clock skew). We
+# use this to filter `gh run list` so we never pick up a previous
+# already-completed dispatch run as if it were the one we just triggered.
+sync_trigger_ts=$(($(date -u +%s) - 5))
 run "gh workflow run sync-skill-md --repo '$DEPLOY_REPO'"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
@@ -81,13 +85,14 @@ fi
 
 info "waiting for sync run..."
 sync_run_id=""
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  sync_run_id="$(gh run list --repo "$DEPLOY_REPO" --workflow sync-skill-md --event workflow_dispatch --limit 1 --json databaseId --jq '.[0] | .databaseId' 2>/dev/null || true)"
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+  # Filter to runs strictly newer than our trigger timestamp.
+  sync_run_id="$(gh run list --repo "$DEPLOY_REPO" --workflow sync-skill-md --event workflow_dispatch --limit 5 --json databaseId,createdAt --jq ".[] | select((.createdAt | fromdateiso8601) >= $sync_trigger_ts) | .databaseId" 2>/dev/null | head -1 || true)"
   [[ -n "$sync_run_id" ]] && break
   sleep 2
 done
 if [[ -z "$sync_run_id" ]]; then
-  err "sync-skill-md run did not start within 20s."
+  err "sync-skill-md run did not start within 30s. Check $DEPLOY_REPO Actions tab."
   exit 3
 fi
 
