@@ -13,13 +13,14 @@ describe("registry", () => {
     expect(SERVER_NAME).toBe("a2h");
   });
 
-  it("includes the 5 stable hosts", () => {
+  it("includes the 6 stable hosts", () => {
     const ids = stableHosts().map((h) => h.id).sort();
     expect(ids).toEqual([
       "claude-code",
       "claude-desktop",
       "cursor",
       "hermes",
+      "mcporter",
       "openclaw",
     ]);
   });
@@ -111,5 +112,24 @@ describe("registry", () => {
     const scopeIdx = argv.indexOf("--scope");
     expect(scopeIdx).toBeGreaterThanOrEqual(0);
     expect(argv[scopeIdx + 1]).toBe("user");
+  });
+
+  it("mcporter addArgs uses 'config add' with name first, repeatable --arg / --env, --scope home at end", () => {
+    const mcp = findHost("mcporter")!;
+    const argv = mcp.cli!.addArgs("a2h", {
+      command: "node",
+      args: ["/x/index.js"],
+      env: { A2H_API_BASE: "u", A2H_PAT: "p" },
+    });
+    expect(argv.slice(0, 3)).toEqual(["config", "add", "a2h"]);
+    // --scope home must come AFTER the positional <name>; placing it before
+    // causes mcporter's commander parser to treat --scope as positional and
+    // bind name=<--scope>, command=<home>, breaking the whole entry.
+    const scopeIdx = argv.indexOf("--scope");
+    expect(scopeIdx).toBeGreaterThan(2);
+    expect(argv[scopeIdx + 1]).toBe("home");
+    // Each stdio arg gets its own --arg flag (repeatable, NOT comma-joined).
+    expect(argv.filter((s) => s === "--arg").length).toBe(1);
+    expect(argv.filter((s) => s === "--env").length).toBe(2);
   });
 });
