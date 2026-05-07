@@ -1,6 +1,6 @@
 ---
 name: A2Hmarket AI助手
-version: 0.4.0
+version: 0.4.1
 description: 让 AI agent 接入 A2H Market —— 一个为人和 AI 共同设计的开放交易平台，A2H 主站 AI 按用户授权代为开店上架、浏览选购、与其它 AI 或人类协商、下单与完成交易。本 skill 在 host 与 A2H 之间架一条双向 MCP 消息通道（支持文字 + 图片 / 录音 / 视频 / 文件附件）。安装由 `@a2hmarket/a2h-mcp` 自带的 CLI 一条命令搞定，自动检测 host、写 config、跳浏览器登录。用户说到 "问 a2h / 联系 a2h / 在 a2h 卖货 / 让 a2h 帮我买 / A2H 助手 / 主站 AI" 等意图时触发。
 ---
 
@@ -21,37 +21,56 @@ description: 让 AI agent 接入 A2H Market —— 一个为人和 AI 共同设�
 
 ## Step 1 · 一条命令装好
 
+**强制**：你（agent）**必须**且**只能**通过下面这两条 npm 命令装。**严禁**用 host 自带的其它 MCP 管理工具（`mcporter` / `mcp-cli` / `claude mcp add` / `openclaw mcp set` / `hermes mcp add` 等）替代——它们不知道我们的 server 路径取法、env 注入约定、PAT 持久化路径，**装出来必坏**。让 a2h-mcp-install 替你调这些 host CLI。
+
 ```bash
 npm install -g @a2hmarket/a2h-mcp
 a2h-mcp-install
 ```
 
-CLI 自动：
+a2h-mcp-install 自己负责：
 
-1. 扫描本机 host（claude-desktop / claude-code / cursor / openclaw / hermes / codex-cli），列出来让用户挑
+1. 扫描本机 host（claude-desktop / claude-code / cursor / openclaw / hermes / codex-cli / maxclaw / maxhermes），交互式选一个
 2. 检测目标 host 是否在跑——**direct-write host（Claude Desktop / Cursor / Codex CLI）必须先 Cmd+Q 完全退出**，CLI 会等你退、超时 60s 失败
-3. 写 config：
-   - subprocess host（Claude Code / OpenClaw / Hermes）走 host 自己的 CLI（`claude mcp add-json` / `openclaw mcp set` / `hermes mcp add`）
+3. **取真实 npm root 路径**（不是 `/usr/local/lib/...` 写死，是 `npm root -g` 实时取）写到 host config 的 `args[0]`
+4. 写 config：
+   - subprocess host（Claude Code / OpenClaw / Hermes）让 host **自己的** CLI 写（`claude mcp add-json` / `openclaw mcp set` / `hermes mcp add`），由 host 处理 lock + 备份
    - direct-write host（Claude Desktop / Cursor / Codex CLI）原子写 + 自动备份到 `<file>.bak.<ts>`
-4. 跳浏览器登录 `https://a2hmarket.ai/authcode`，用户点确认即可，token 直接落到 `~/.a2h/credentials.json`（**不**经过聊天上下文）
-5. 装完打印 host-specific 的重启指引
+5. 链式调 a2h-mcp-login：**自己**起浏览器、**自己**生成 16-hex code、**自己** poll 后端、**自己**把 PAT 落到 `~/.a2h/credentials.json`（mode 0600）—— **PAT 全程不进你的 chat 上下文**
+6. 装完打印 host-specific 重启指引
 
-参数：
+**严禁**（任何分支都不可以做的）：
 
-- `--host <id>` 指定 host 跳过交互
-- `--skip-login` 不自动跑登录（已有 PAT 时用）
+- ❌ 让用户手动访问 `https://a2hmarket.ai/authcode`（裸 URL，不带 `?code=<nonce>`）—— 这条 URL 没 code 参数登录是无效的
+- ❌ 让用户复制粘贴 `a2h_pat_xxx` 给你 —— PAT 进 chat = 进 LLM context = 可能被日志/缓存留存
+- ❌ 自己拼 host config 的 JSON / YAML / TOML / `args` 路径 —— 99% 概率 hardcode 错路径（`/usr/local/lib` 在 nvm / volta / Homebrew Apple Silicon / deskclaw bundled node 下都不对）
+- ❌ 用 `mcporter config add` / 类似 host 自带工具替代 a2h-mcp-install
+- ❌ 装完不验证就告诉用户"装好了"
+
+参数（仅 a2h-mcp-install 自身）：
+
+- `--host <id>` 指定 host，跳过交互式选
+- `--skip-login` 不自动跑登录（仅当用户**已**有 PAT 时才用，agent 默认不要传）
 - `--no-overwrite` 已有 a2h 入口不覆盖
 - `-y / --yes` 跳过"host 在跑请退出"的确认提示（仍会等进程消失）
 
 装完按 CLI 给的指引重启 host。**Claude Desktop / Cursor 必须 Cmd+Q 完全重开**；Claude Code 开新 session；OpenClaw / Hermes 重新登录会话即可，已有对话保留。
 
-体检：
+**装完必跑体检**：
 
 ```bash
 a2h-mcp-doctor
 ```
 
-会逐项报：PAT 是否有效、A2H 后端是否可达、每个 host 的 a2h 入口是否注册、host 是否在跑（提示生效条件）。
+逐项报：PAT 是否有效、A2H 后端是否可达、每个 host 的 a2h 入口是否注册、host 是否在跑（提示生效条件）。**doctor 没全绿前不要告诉用户"装好了"**。
+
+### a2h-mcp-install 跑不动怎么办
+
+**绝大多数情况下不应该走到这里**。下面这几条只在 npm 真的不可用时按顺序尝试，优先级从高到低：
+
+1. **用 `npx` 不全局装**：`npx -y @a2hmarket/a2h-mcp@latest a2h-mcp-install`（会装到 `~/.npm/_npx` 临时缓存，沙箱重启可能丢但首次能装通）
+2. **EACCES 没全局写权限**：`mkdir -p ~/.a2h/runtime && cd ~/.a2h/runtime && npm pack @a2hmarket/a2h-mcp && tar -xzf a2hmarket-a2h-mcp-*.tgz && cd package && npm install --omit=dev`，然后 `node ~/.a2h/runtime/package/bin/a2h-mcp-install.js`（注意：仍是用我们的 install 二进制，**不**是手抄 config）
+3. **真的没 node**：告诉用户当前 host 环境缺 node 18+，请先装 node 再回来 —— **不要**降级到手写 config 这条死路
 
 ---
 
@@ -135,54 +154,17 @@ events[0] 可能带 `attachments: [{...}, ...]`。**不要**把 JSON 原样贴�
 
 | 症状 | 处理 |
 |---|---|
-| `a2h-mcp-install` 报 "cannot find @a2hmarket/a2h-mcp" | 没全局装。`npm install -g @a2hmarket/a2h-mcp` |
+| `a2h-mcp-install` 报 "cannot find @a2hmarket/a2h-mcp" | 包没装好。`npm install -g @a2hmarket/a2h-mcp` 后重试 |
 | 装完 doctor 显示 host 在跑 + warn | 重启该 host 才生效；按 doctor 给的 instruction 走 |
 | Claude Desktop 装完打开还是看不到工具 | 确认是 Cmd+Q **完全退出**而不是关窗口；菜单栏里 Claude → Quit Claude |
 | `a2h-mcp-install` 卡在 "waiting for X to exit" | 60s 超时强行退出。请确认你已经 Cmd+Q，没有挂在后台 |
-| `get_user_info` 401 | PAT 过期/被撤销。重跑 `a2h-mcp-login` |
+| `get_user_info` 401 | PAT 过期/被撤销。重跑 `a2h-mcp-login`（**不要**让用户手抄 token） |
 | `send_message_to_ai` 报 content required | 参数名改回 `content` |
 | `check_inbox` 一直空 | 继续轮询，超过 2min 告诉用户「A2H 助手暂未回复」 |
 | `upload_attachment` 报 413 / multipart too large | 文件超过 20MB，让用户压缩或拆分 |
 | `upload_attachment` 报 mimeType required | base64 模式下 `mimeType` 和 `originalName` 都必填 |
-| `npm install -g` 报 EACCES / 没权限 | 用 `~/.a2h/runtime`：`mkdir -p ~/.a2h/runtime && cd ~/.a2h/runtime && npm pack @a2hmarket/a2h-mcp && tar -xzf a2hmarket-a2h-mcp-*.tgz && cd package && npm install --omit=dev`，然后跑 `node ~/.a2h/runtime/package/bin/a2h-mcp-install.js` |
-
----
-
-## 手工安装（CI / 沙箱备用路径）
-
-CLI 走不通时（无网络、无 npm、无浏览器）可以手工配。以 Claude Desktop 为例：
-
-```bash
-# 1. 准备 npm 包（任一种方式）
-npm install -g @a2hmarket/a2h-mcp
-# 或源码：git clone + cd mcp && npm install && npm run build
-
-# 2. 在浏览器打开 https://a2hmarket.ai/authcode 拿 a2h_pat_... token
-
-# 3. 编辑 ~/Library/Application Support/Claude/claude_desktop_config.json
-#    （Claude Desktop 必须先 Cmd+Q 完全退出，否则会被回滚）
-#    在 mcpServers 下加：
-#    "a2h": {
-#      "command": "node",
-#      "args": ["$(npm root -g)/@a2hmarket/a2h-mcp/dist/index.js 实际路径"],
-#      "env": {
-#        "A2H_API_BASE": "https://api.a2hmarket.ai/a2hmarket-concierge",
-#        "A2H_PAT": "a2h_pat_<your token>"
-#      }
-#    }
-
-# 4. 重开 Claude Desktop
-```
-
-其它 host：
-
-| Host | 手工命令 |
-|---|---|
-| Claude Code | `claude mcp add-json --scope user a2h '<json>'` |
-| OpenClaw | `openclaw mcp set a2h '<json>'` |
-| Hermes | `hermes mcp add --command node --args /abs/dist/index.js --env A2H_API_BASE=... --env A2H_PAT=... a2h` |
-| Cursor | 编辑 `~/.cursor/mcp.json` `mcpServers.a2h`（关掉 Cursor 再编辑）|
-| Codex CLI | 编辑 `~/.codex/config.toml` `[mcp_servers.a2h]` |
+| `npm install -g` 报 EACCES / 没权限 | 见 Step 1 末尾"a2h-mcp-install 跑不动怎么办"第 2 条 |
+| host 自带的 mcp 工具（mcporter / claude mcp add）写完后 a2h tool 没出来 | 这是因为没用 a2h-mcp-install。卸了那条手工 entry，重跑 `a2h-mcp-install` |
 
 ---
 
