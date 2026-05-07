@@ -27,10 +27,17 @@ export const uploadAttachmentTool = {
   descriptor: {
     name: "upload_attachment",
     description:
-      "Upload a single file to A2H so it becomes an attachment with a public URL. " +
-      "Pass either { filePath } or { base64, mimeType, originalName }. " +
-      "Returns { url, mediaType, mimeType, fileSize, originalName } — paste " +
-      "the whole object into send_message_to_ai's `attachments` array.",
+      "Upload a single file to A2H so it becomes an attachment the AI can see. Call once per file " +
+      "BEFORE send_message_to_ai. Two input shapes: " +
+      "(1) { filePath: '/abs/path/to/x.png' } — when the host can write the file to disk. mimeType " +
+      "is optional; server infers from extension if omitted. " +
+      "(2) { base64: 'iVBORw0...', mimeType: 'image/png', originalName: 'x.png' } — when host " +
+      "exposes attachments inline. mimeType AND originalName are both required for base64. " +
+      "Returns { url, mediaType, mimeType, fileSize, originalName, ... } — paste the WHOLE object " +
+      "(not just url) into send_message_to_ai's `attachments` array. " +
+      "mediaType is auto-derived from mimeType (image/* → 1, audio/* → 2, video/* → 3, else 4); " +
+      "pass the mediaType arg to override. Single-file cap is ~20MB (server multipart limit); on " +
+      "413 / 'multipart too large' tell user to compress or split.",
     inputSchema: {
       type: "object" as const,
       properties: {

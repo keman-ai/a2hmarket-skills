@@ -273,6 +273,191 @@ describe("login.main (authcode flow)", () => {
     expect(requestMock).toHaveBeenCalledTimes(60);
     // Credentials file should NOT have been written.
     expect(existsSync(join(tmp, "credentials.json"))).toBe(false);
+    // Pending file should be cleaned on timeout.
+    expect(existsSync(join(tmp, "login-pending.json"))).toBe(false);
     exitSpy.mockRestore();
+  });
+});
+
+describe("login.startCmd / login.finishCmd (two-step flow)", () => {
+  /** Read the pending state file as if we were a sibling process. */
+  function readPendingFile() {
+    const path = join(tmp, "login-pending.json");
+    if (!existsSync(path)) return null;
+    return JSON.parse(readFileSync(path, "utf-8")) as {
+      code: string;
+      url: string;
+      pollUrl: string;
+      createdAt: string;
+    };
+  }
+
+  it("startCmd writes pending file with code/url and exits without polling", async () => {
+    const { startCmd } = await import("../src/login.js");
+    await startCmd();
+
+    // No HTTP poll happened — start is non-blocking.
+    expect(requestMock).not.toHaveBeenCalled();
+
+    const pending = readPendingFile();
+    expect(pending).not.toBeNull();
+    expect(pending!.code).toMatch(/^SKILL-[a-f0-9]{16}$/);
+    expect(pending!.url).toMatch(
+      /^http:\/\/localhost:5173\/authcode\?code=SKILL-/,
+    );
+    expect(pending!.pollUrl).toMatch(
+      /^http:\/\/localhost:8802\/findu-user\/api\/v1\/public\/user\/agent\/auth\?code=SKILL-/,
+    );
+    // createdAt should be parseable as a recent ISO date.
+    const age = Date.now() - Date.parse(pending!.createdAt);
+    expect(age).toBeGreaterThanOrEqual(0);
+    expect(age).toBeLessThan(5_000);
+  });
+
+  it("finishCmd returns Stale (3) when no pending file", async () => {
+    const { finishCmd } = await import("../src/login.js");
+    const code = await finishCmd(5);
+    expect(code).toBe(3);
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it("finishCmd returns Stale (3) and clears file when pending older than TTL", async () => {
+    // Write a pending file dated 11 minutes ago (TTL is 10 min).
+    const stalePending = {
+      code: "SKILL-stale",
+      url: "http://x/authcode?code=SKILL-stale",
+      pollUrl: "http://x/poll?code=SKILL-stale",
+      createdAt: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+    };
+    require("node:fs").writeFileSync(
+      join(tmp, "login-pending.json"),
+      JSON.stringify(stalePending),
+    );
+
+    const { finishCmd } = await import("../src/login.js");
+    const code = await finishCmd(5);
+    expect(code).toBe(3);
+    expect(existsSync(join(tmp, "login-pending.json"))).toBe(false);
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it("finishCmd returns Pending (2) when polls find no token", async () => {
+    requestMock.mockResolvedValue(mockResponse(200, JSON.stringify({ data: null })));
+    const { startCmd, finishCmd } = await import("../src/login.js");
+    await startCmd();
+
+    const p = finishCmd(3);
+    // Two intra-poll sleeps of 5s each (3 polls, 2 gaps).
+    await flushPolls(2);
+    const code = await p;
+
+    expect(code).toBe(2);
+    expect(requestMock).toHaveBeenCalledTimes(3);
+    // Pending file should NOT be cleared — caller may retry finish.
+    expect(existsSync(join(tmp, "login-pending.json"))).toBe(true);
+    // Credentials file NOT written.
+    expect(existsSync(join(tmp, "credentials.json"))).toBe(false);
+  });
+
+  it("finishCmd returns Success (0) when first poll has patToken", async () => {
+    requestMock.mockResolvedValue(
+      mockResponse(
+        200,
+        JSON.stringify({
+          code: "OK",
+          data: {
+            agentId: "ag_finish_1",
+            patToken: "a2h_pat_finish_ok",
+            patTokenName: "tok",
+          },
+        }),
+      ),
+    );
+    const { startCmd, finishCmd } = await import("../src/login.js");
+    await startCmd();
+
+    const code = await finishCmd(5);
+
+    expect(code).toBe(0);
+    expect(requestMock).toHaveBeenCalledTimes(1); // hit on first attempt
+    // Credentials saved with right token.
+    const creds = JSON.parse(
+      readFileSync(join(tmp, "credentials.json"), "utf-8"),
+    );
+    expect(creds.token).toBe("a2h_pat_finish_ok");
+    expect(creds.agentId).toBe("ag_finish_1");
+    // Pending cleared on success so next start is clean.
+    expect(existsSync(join(tmp, "login-pending.json"))).toBe(false);
+  });
+
+  it("finishCmd returns Success after some pending polls (token arrives mid-loop)", async () => {
+    requestMock
+      .mockResolvedValueOnce(mockResponse(200, JSON.stringify({ data: null })))
+      .mockResolvedValueOnce(
+        mockResponse(
+          200,
+          JSON.stringify({
+            code: "OK",
+            data: { agentId: "ag_late", patToken: "a2h_pat_late" },
+          }),
+        ),
+      );
+    const { startCmd, finishCmd } = await import("../src/login.js");
+    await startCmd();
+
+    const p = finishCmd(5);
+    await flushPolls(1); // one inter-poll sleep of 5s
+    const code = await p;
+
+    expect(code).toBe(0);
+    expect(requestMock).toHaveBeenCalledTimes(2);
+    expect(
+      JSON.parse(readFileSync(join(tmp, "credentials.json"), "utf-8")).token,
+    ).toBe("a2h_pat_late");
+  });
+
+  it("finishCmd reuses the pollUrl from pending (start mints code, finish uses it)", async () => {
+    const { startCmd, finishCmd } = await import("../src/login.js");
+    await startCmd();
+    const pending = readPendingFile()!;
+
+    requestMock.mockResolvedValue(
+      mockResponse(
+        200,
+        JSON.stringify({
+          code: "OK",
+          data: { agentId: "ag_x", patToken: "a2h_pat_reuse" },
+        }),
+      ),
+    );
+
+    await finishCmd(1);
+    expect(requestMock).toHaveBeenCalledTimes(1);
+    const [url] = requestMock.mock.calls[0];
+    // Verify the URL hit was the SAME one start wrote into pending.
+    expect(url).toBe(pending.pollUrl);
+  });
+
+  it("finishCmd treats network errors as still-pending (does not consume attempt budget incorrectly)", async () => {
+    requestMock
+      .mockRejectedValueOnce(new Error("ECONNREFUSED"))
+      .mockResolvedValueOnce(
+        mockResponse(
+          200,
+          JSON.stringify({
+            code: "OK",
+            data: { agentId: "ag_recover", patToken: "a2h_pat_recover" },
+          }),
+        ),
+      );
+    const { startCmd, finishCmd } = await import("../src/login.js");
+    await startCmd();
+
+    const p = finishCmd(5);
+    await flushPolls(1);
+    const code = await p;
+
+    expect(code).toBe(0);
+    expect(requestMock).toHaveBeenCalledTimes(2);
   });
 });

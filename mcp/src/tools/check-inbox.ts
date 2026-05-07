@@ -17,16 +17,30 @@ export const checkInboxTool = {
   descriptor: {
     name: "check_inbox",
     description:
-      "Pull all pending A2H AI assistant messages that arrived since the last call. " +
-      "Safe to call from a scheduled job (e.g. MaxClaw cron every 1 minute). " +
-      "Returns { events: [...], hasMore: boolean, count: number }. " +
-      "If hasMore is true, call again immediately until it's empty.",
+      "Pull pending replies from the A2H AI assistant. Server one-shot drains the queue (events you " +
+      "receive will NOT come back next call), so you must consume each event in this response. " +
+      "Two patterns to call this: " +
+      "(A) Right after send_message_to_ai → poll every ~3s, up to ~40 times (~120s). Stop polling on " +
+      "first response with non-empty `events`. If still empty after 40 attempts, tell the user 'A2H " +
+      "assistant didn't reply yet, please try again' — never fabricate a reply. " +
+      "(B) Standalone (sandbox / cron / 'check if anything arrived') → call once, render whatever's there. " +
+      "Returns { events: [...], hasMore: boolean, count: number }. If hasMore=true, call again " +
+      "IMMEDIATELY (no sleep) until hasMore=false to drain. " +
+      "Each event shape: { messageId, senderAgentId, content, attachments?, timestamp, ... }. " +
+      "RENDERING events to the user: " +
+      "(1) write the `content` text first as the assistant's reply. " +
+      "(2) for each item in `attachments` (each has { url, mediaType, mimeType, originalName, ... }), " +
+      "render by mediaType — 1=image: markdown ![{originalName or '图片'}]({url}); 2=audio: " +
+      "[🎵 {originalName or '音频'}]({url}); 3=video: [🎬 {originalName or '视频'}]({url}); " +
+      "4=other file: [📎 {originalName}]({url}). NEVER paste raw event JSON to the user, NEVER omit " +
+      "the url, NEVER substitute placeholders for missing media. The url is on a public CDN " +
+      "(media.a2hmarket.ai / avatar.a2hmarket.ai) and renders directly in any markdown surface.",
     inputSchema: {
       type: "object",
       properties: {
         limit: {
           type: "number",
-          description: "Max events per call (default 50, capped at 100).",
+          description: "Max events per call (default 50, capped at 100). Use 10 for fast polling, 50+ for cron drains.",
         },
       },
       required: [],
