@@ -61,7 +61,13 @@ export const HOSTS: HostSpec[] = [
       listArgs: () => ["mcp", "list"],
       removeArgs: (name) => ["mcp", "remove", name],
     },
-    detect: { binOnPath: "claude" },
+    detect: {
+      binOnPath: "claude",
+      // Claude Code sets these env vars in every shell it spawns; presence of
+      // any one means a2h-mcp-install was invoked from inside Claude Code, so
+      // we should default to installing INTO Claude Code rather than asking.
+      runtimeEnv: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"],
+    },
     process: {},
     reload: {
       kind: "session-restart",
@@ -244,7 +250,11 @@ export const HOSTS: HostSpec[] = [
       win32: join(HOME, ".cursor/mcp.json"),
     },
     mcpKeyPath: ["mcpServers"],
-    detect: { configExists: true },
+    detect: {
+      configExists: true,
+      // Cursor sets a unique trace id env in its integrated terminal sessions.
+      runtimeEnv: ["CURSOR_TRACE_ID"],
+    },
     process: {
       // macOS literal first, then Linux variants (Cursor ships as
       // electron AppImage / extracted to a path containing `cursor`).
