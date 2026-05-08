@@ -146,24 +146,25 @@ function dispatchInstall(host: HostSpec, spec: McpServerSpec, overwrite: boolean
       try {
         return installSubprocess(host, SERVER_NAME, spec);
       } catch (e) {
-        // Surface a more actionable error for the two known failure modes:
-        // 1) the host's CLI is older than the version we coded against and
-        //    doesn't have the `mcp` subcommand we expect (seen on OpenClaw
-        //    2026.3.x, present on MaxClaw managed environments)
-        // 2) the host's config schema rejects unknown keys (MaxClaw managed)
-        // Both have the same workaround: install via mcporter, which writes
-        // to a vendor-neutral config the host will read.
+        // Surface a conceptual hint instead of a fixed command for two
+        // failure modes that share a root cause:
+        //   1) host CLI is older than the version we coded against and
+        //      lacks the `mcp` subcommand (OpenClaw 2026.3.x, etc.)
+        //   2) host's config schema rejects unknown top-level keys
+        //      (MaxClaw managed env)
+        // Both → host can't accept MCP edits, agent should switch to
+        // mcporter (vendor-neutral MCP CLI). Don't spell the exact
+        // commands — env varies (npm vs npx vs already-installed; HOME
+        // path; whether the entry actually lands silently fails). Let
+        // the agent reason about its env, attempt, AND verify.
         const msg = e instanceof Error ? e.message : String(e);
         if (
           /unknown command 'mcp'/.test(msg) ||
           /Unrecognized key:?\s*mcp/i.test(msg)
         ) {
           throw new Error(
-            `${host.displayName} doesn't accept MCP edits via its own CLI` +
-              ` (likely an older or managed-environment build).\n` +
-              `Workaround: install mcporter and retry against it.\n` +
-              `  npm install -g mcporter\n` +
-              `  a2h-mcp-install --host mcporter\n\n` +
+            `${host.displayName}'s CLI rejected MCP edits — likely an older binary or a managed environment that locks the MCP config schema (MaxClaw / older OpenClaw / etc.).\n\n` +
+              `The vendor-neutral fallback is \`mcporter\` — a generic MCP CLI that managed envs typically read. Try installing it (if not already present) and re-run this installer with \`--host mcporter\`. **Verify the entry actually landed afterwards** (the host CLI sometimes silently drops writes in managed envs, so doctor or \`mcporter config list --scope home\` is a must).\n\n` +
               `Underlying error:\n${msg}`,
           );
         }

@@ -1,6 +1,6 @@
 {
   "name": "@a2hmarket/a2h-mcp",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Local MCP server for A2H Market AI assistant",
   "type": "module",
   "bin": {
