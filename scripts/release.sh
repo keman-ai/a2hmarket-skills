@@ -170,11 +170,19 @@ if [[ "$SKIP_NPM" -eq 0 ]]; then
     fi
     ok "release.yml succeeded"
 
-    info "verifying npm registry..."
-    actual="$(npm view "$NPM_PKG" version 2>/dev/null || true)"
+    # npm registry CDN propagation can lag the CI publish by tens of seconds.
+    # Don't fail the release just because the first poll saw the old version —
+    # retry with backoff. Use --prefer-online to bypass local npm cache.
+    info "verifying npm registry (with retry)..."
+    actual=""
+    for delay in 0 5 10 15 30; do
+      [[ "$delay" -gt 0 ]] && sleep "$delay"
+      actual="$(npm view "$NPM_PKG" version --prefer-online 2>/dev/null || true)"
+      [[ "$actual" == "$VERSION_NO_V" ]] && break
+    done
     if [[ "$actual" != "$VERSION_NO_V" ]]; then
-      err "npm registry shows '$actual', expected '$VERSION_NO_V'"
-      err "(could be propagation lag — try \`npm view $NPM_PKG version\` again in 30s)"
+      err "npm registry still shows '$actual' after 60s of retries; expected '$VERSION_NO_V'"
+      err "(CI publish succeeded — check https://www.npmjs.com/package/$NPM_PKG manually, then re-run this script with --skip-npm)"
       exit 2
     fi
     ok "npm publish landed: $NPM_PKG@$VERSION_NO_V"
@@ -227,5 +235,10 @@ fi
 # ── Done ──────────────────────────────────────────────────────────────────────
 
 ok "release complete"
-[[ "$SKIP_NPM"   -eq 0 ]] && echo "  npm:   $NPM_PKG@$VERSION_NO_V"
-[[ "$SKIP_SKILL" -eq 0 ]] && echo "  skill: $SKILL_URL"
+# When --skip-skill, the last line `[[ "$SKIP_SKILL" -eq 0 ]] && echo ...`
+# was evaluating false → returning exit 1 → becoming the script's exit code.
+# Caused the v0.3.3 release to falsely look like a failure even though the
+# actual release succeeded. Use explicit if/fi to summarise so each branch
+# returns 0 regardless of whether it printed.
+if [[ "$SKIP_NPM"   -eq 0 ]]; then echo "  npm:   $NPM_PKG@$VERSION_NO_V"; fi
+if [[ "$SKIP_SKILL" -eq 0 ]]; then echo "  skill: $SKILL_URL"; fi
