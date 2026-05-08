@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   HOSTS,
@@ -7,6 +7,7 @@ import {
   sortHosts,
   stableHosts,
 } from "../src/hosts/registry.js";
+import { detectRuntimeHost } from "../src/hosts/detect.js";
 
 describe("registry", () => {
   it("server name is 'a2h'", () => {
@@ -154,5 +155,53 @@ describe("registry", () => {
     // Each stdio arg gets its own --arg flag (repeatable, NOT comma-joined).
     expect(argv.filter((s) => s === "--arg").length).toBe(1);
     expect(argv.filter((s) => s === "--env").length).toBe(2);
+  });
+});
+
+describe("detectRuntimeHost (env-based runtime auto-pick)", () => {
+  // Save / restore env vars we mutate so other tests don't leak state.
+  const SAVED: Record<string, string | undefined> = {};
+  const ENV_KEYS = ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CURSOR_TRACE_ID"];
+
+  beforeEach(() => {
+    for (const k of ENV_KEYS) {
+      SAVED[k] = process.env[k];
+      delete process.env[k];
+    }
+  });
+
+  afterEach(() => {
+    for (const k of ENV_KEYS) {
+      if (SAVED[k] === undefined) {
+        delete process.env[k];
+      } else {
+        process.env[k] = SAVED[k];
+      }
+    }
+  });
+
+  it("returns claude-code when CLAUDECODE is set", () => {
+    process.env.CLAUDECODE = "1";
+    expect(detectRuntimeHost(HOSTS)?.id).toBe("claude-code");
+  });
+
+  it("returns claude-code when only CLAUDE_CODE_ENTRYPOINT is set (any-of semantics)", () => {
+    process.env.CLAUDE_CODE_ENTRYPOINT = "cli";
+    expect(detectRuntimeHost(HOSTS)?.id).toBe("claude-code");
+  });
+
+  it("returns cursor when CURSOR_TRACE_ID is set", () => {
+    process.env.CURSOR_TRACE_ID = "abc123";
+    expect(detectRuntimeHost(HOSTS)?.id).toBe("cursor");
+  });
+
+  it("returns undefined when no runtimeEnv markers are present", () => {
+    expect(detectRuntimeHost(HOSTS)).toBeUndefined();
+  });
+
+  it("only honors hosts in the input list — passing only mcporter+codex should NOT match claude-code env", () => {
+    process.env.CLAUDECODE = "1";
+    const subset = HOSTS.filter((h) => h.id === "mcporter" || h.id === "codex-cli");
+    expect(detectRuntimeHost(subset)).toBeUndefined();
   });
 });

@@ -44,6 +44,14 @@ export interface HostSpec {
     configExists?: boolean;
     /** subprocess default: this binary on PATH. */
     binOnPath?: string;
+    /**
+     * Env vars whose presence (any one) indicates this host is the CURRENT
+     * runtime (i.e. a2h-mcp-install is being invoked from inside this host).
+     * Used by pickHost as a smart default when multiple hosts are installed —
+     * we prefer "the one I'm running inside" over making the agent ask.
+     * Example: claude-code sets CLAUDECODE=1.
+     */
+    runtimeEnv?: string[];
   };
 
   process: {

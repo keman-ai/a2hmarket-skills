@@ -98,3 +98,31 @@ export async function waitForHostQuit(
 export function detectInstalledHosts(hosts: HostSpec[]): HostSpec[] {
   return hosts.filter(isHostInstalled);
 }
+
+/**
+ * Detect which host (if any) the install is being invoked FROM by checking
+ * `runtimeEnv` markers. Returns the first host whose runtimeEnv has at least
+ * one var present in process.env.
+ *
+ * Use case: a developer machine has 5+ hosts installed; without this hint,
+ * pickHost would dump a "got 7 candidates, please pass --host" error and
+ * force the agent to guess. With it, we default to "the host I'm running
+ * inside" (e.g. CLAUDECODE=1 → claude-code), which is almost always what
+ * the user wants.
+ *
+ * Returns undefined if no env hint matched.
+ */
+export function detectRuntimeHost(hosts: HostSpec[]): HostSpec | undefined {
+  for (const h of hosts) {
+    const envVars = h.detect.runtimeEnv;
+    if (!envVars || envVars.length === 0) {
+      continue;
+    }
+    for (const v of envVars) {
+      if (process.env[v]) {
+        return h;
+      }
+    }
+  }
+  return undefined;
+}

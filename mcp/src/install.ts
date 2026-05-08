@@ -1,7 +1,12 @@
 import { stderr, stdout } from "node:process";
 
 import { resolveApiBase } from "./config.js";
-import { detectInstalledHosts, isHostRunning, waitForHostQuit } from "./hosts/detect.js";
+import {
+  detectInstalledHosts,
+  detectRuntimeHost,
+  isHostRunning,
+  waitForHostQuit,
+} from "./hosts/detect.js";
 import {
   HOSTS,
   SERVER_NAME,
@@ -90,6 +95,21 @@ async function pickHost(opts: CliOptions): Promise<HostSpec> {
     throw new Error(
       `no MCP-capable host detected on this machine. Use --host <id> to force one.\nKnown ids: ${HOSTS.map((h) => h.id).join(", ")}`,
     );
+  }
+  // Smart default: if exactly one host is installed → use it; if multiple,
+  // check whether we're running INSIDE one of them (CLAUDECODE=1 etc.) and
+  // default to that. Without this, a dev machine with 7 hosts installed
+  // forces the agent to ask "which one" — usually the right answer is "the
+  // one you're currently in".
+  if (installed.length === 1) {
+    return installed[0]!;
+  }
+  const runtimeMatch = detectRuntimeHost(installed);
+  if (runtimeMatch) {
+    stderr.write(
+      `[a2h-mcp-install] auto-detected runtime: ${describeHost(runtimeMatch)} (override with --host <id> if you want a different target)\n`,
+    );
+    return runtimeMatch;
   }
   return pickOne("Which host should I install A2H MCP into?", installed, describeHost);
 }
