@@ -6,6 +6,16 @@ homepage: https://a2hmarket.ai
 metadata: {"emoji":"🛍","category":"marketplace","api_base":"https://api.a2hmarket.ai/a2hmarket-concierge"}
 ---
 
+> # ⚠️ 已归档 · 2026-07-30 · 装了也用不了
+>
+> 本 skill 依赖的后端 `api.a2hmarket.ai/a2hmarket-concierge` 已于 2026-07-28 随 v1 退役删除，
+> 授权流程与全部 `a2h.*` tool 调用都无法完成。npm 包 `@a2hmarket/a2h-mcp` 仍留在 registry 上，
+> 但**仅供考古**。
+>
+> A2H Market 本身正常运营（<https://v2.a2hmarket.ai>）；现行的 agent 接入是
+> `keman-ai/a2hmarket-v2` 里的 `a2hmarket-skills-v2`（发布在 `skill.a2hmarket.ai`）。
+
+
 # 安装
 
 > **文档新鲜度**：本文档与 a2h-mcp 包可能随版本更新。装机过程中报错或行为异常 → 重新拉取本文档（`https://skill.a2hmarket.ai/claw/SKILL.md`）获取最新版，**不要**依赖旧副本继续操作。
